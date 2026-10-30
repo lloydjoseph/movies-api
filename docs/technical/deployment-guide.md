@@ -1,19 +1,22 @@
 # Manual deployment guide
 
-**Status:** Release procedure template for the owner's self-hosted server. The source repository is private on GitHub and the server checkout path is `/home/joseph/movies-api`; the production Compose file is `docker-compose.production.yml`, the external proxy network is `movies-proxy`, and the server-side environment-file path and backup location still need to be finalized. Replace angle-bracket placeholders with actual values before using the commands.
+**Status:** Release procedure for the owner's self-hosted server. The source repository is private on GitHub and the server checkout path is `/home/joseph/movies-api`. The production Compose file is `docker-compose.production.yml`; host Nginx will route the apex domain to the frontend gateway bound at `127.0.0.1:8188`. NPM, its media network, and existing Jellyfin routes stay unchanged. The production environment path is `/etc/movies-api/production.env`; choose and verify a protected database backup location before migration/cutover.
 
-Deployments are manual and expected only every few months. Before first use, review the production Compose configuration, establish the server-side environment file and backup location, and rehearse database restore.
+Deployments are manual and expected only every few months. Before first use, review the production Compose configuration, establish the server-side environment file and backup location, obtain a valid certificate for `jlloyd.fr`, and rehearse database restore.
 
 ## One-time setup needed before the first release
 
 - Clone this repository to `/home/joseph/movies-api` on the server.
 - Configure a repository-scoped read-only GitHub deploy key on the server before cloning. Keep the private key outside the repository with restrictive file permissions; add only the public key to the GitHub repository's deploy keys with read-only access. (Chosen approach; setup remains to be done.)
-- Create the external `movies-proxy` Docker network and attach Nginx Proxy Manager to it.
+- The server already has host Nginx on public ports 80/443. Keep it and its `ask.jlloyd.fr` and `watch.jlloyd.fr` virtual hosts unchanged; do not alter router forwards or NPM.
+- DNS for `jlloyd.fr` points to the server's router address. Obtain a separate Let's Encrypt certificate for the apex; the existing certificates cover only `ask.jlloyd.fr` and `watch.jlloyd.fr`.
+- Install the temporary ACME config from `deploy/nginx-movies-acme.conf` under `/etc/nginx/sites-available/movies-api`, enable it if not already enabled with `ln -s /etc/nginx/sites-available/movies-api /etc/nginx/sites-enabled/movies-api`, validate with `/usr/sbin/nginx -t`, reload host Nginx, then run `certbot certonly --nginx -d jlloyd.fr`.
+- After the certificate exists, install the final `deploy/nginx-movies.conf` at `/etc/nginx/sites-available/movies-api`, validate and reload Nginx. The final host config proxies to the Compose frontend gateway on loopback port 8188.
+- Copy `production.env.example` to `/etc/movies-api/production.env`, restrict permissions, and edit it with a protected editor. Never put actual secrets in Git or command history.
 - Keep `DB_ADMIN_USER` and `DB_ADMIN_PASSWORD` for PostgreSQL initialization only; the Spring Boot service must receive only the application role in `DB_USERNAME` and `DB_PASSWORD`. The init script is applied only to an empty PostgreSQL volume.
-- Keep server-only configuration and credentials in a protected environment/secrets file outside Git. Ensure it is ignored by Git and readable only by the deployment operator.
-- Configure NPM locations for `/movies` (including the slashless path), `/api/`, `/oauth2/`, and `/login/` to `frontend:8080`, preserving host `jlloyd.fr`.
 - Choose a protected backup location and document how to restore a PostgreSQL backup.
-- Complete and rehearse the [data migration plan](data-migration.md) before treating the new PostgreSQL database as authoritative.
+- Resolve the source of the existing 345-movie catalog and complete/rehearse the [data migration plan](data-migration.md) before treating the production database as authoritative. Do not start using a new empty catalog as the replacement.
+- Register `https://jlloyd.fr/login/oauth2/code/google` as an allowed Google OAuth callback.
 - Decide the production branch or release-tag convention and record the deployed Git commit.
 
 ## Release checklist
@@ -51,7 +54,7 @@ Before a release that can affect data or schema, take a PostgreSQL dump. This co
 
 ```bash
 umask 077
-docker compose --env-file <server-env-file> -f docker-compose.production.yml \
+docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml \
   exec -T postgres \
   sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' \
   > <protected-backup-directory>/movies-<date-and-time>.sql
@@ -77,13 +80,15 @@ Review the listed changes. If they are not the intended release, stop before app
 From the repository root, validate the production Compose configuration. Keep rendered configuration output private because it may contain expanded values:
 
 ```bash
-docker compose --env-file <server-env-file> -f docker-compose.production.yml config --quiet
+docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml config --quiet
 ```
+
+Confirm that the frontend publishes only `127.0.0.1:8188->8080`; do not publish the backend or database ports.
 
 Then build and start/update the application:
 
 ```bash
-docker compose --env-file <server-env-file> -f docker-compose.production.yml up -d --build
+docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml up -d --build
 ```
 
 Do not use `docker compose down -v` as a routine update command; removing volumes can delete the database. Do not expose PostgreSQL on a public host port.
@@ -93,13 +98,22 @@ Do not use `docker compose down -v` as a routine update command; removing volume
 Use the production Compose services:
 
 ```bash
-docker compose --env-file <server-env-file> -f docker-compose.production.yml ps
-docker compose --env-file <server-env-file> -f docker-compose.production.yml logs --tail=100 frontend backend postgres
+docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml ps
+docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml logs --tail=100 frontend backend postgres
+```
+
+Install the final host Nginx config from `deploy/nginx-movies.conf` only after the apex certificate exists and the Compose frontend is responding on `127.0.0.1:8188`. Validate and reload Nginx:
+
+```bash
+install -m 0644 deploy/nginx-movies.conf /etc/nginx/sites-available/movies-api
+/usr/sbin/nginx -t
+systemctl reload nginx
 ```
 
 Then check the application through its public domain:
 
-- The domain opens with a valid HTTPS certificate and no browser certificate warning.
+- `https://jlloyd.fr/movies/` opens with a certificate whose SAN includes `jlloyd.fr` and no browser certificate warning.
+- Existing `ask.jlloyd.fr`, `watch.jlloyd.fr`, Jellyfin, and NPM routes still work.
 - Google sign-in works for an allowlisted account.
 - An authenticated user sees only their own movie catalog.
 - Add, view, search, filter, edit, and confirmed permanent delete work as expected.
@@ -117,4 +131,4 @@ Avoid testing permanent deletion on real catalog data; use a disposable test ent
 
 ## Future refinement
 
-Once the server-side environment path, backup storage, NPM routes, and restore procedure exist, replace the remaining placeholders with exact values and record a known-good deployed version. Because releases are infrequent, automated deployment is not required; CI checks can be added independently if useful.
+Once the backup location and restore procedure are established, replace remaining placeholders and record a known-good deployed version. Because releases are infrequent, automated deployment is not required; CI checks can be added independently if useful.

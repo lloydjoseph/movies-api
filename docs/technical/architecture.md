@@ -27,15 +27,17 @@ The repository currently uses Angular 22, TypeScript 6, Spring Boot 4.1.0, Java 
 Phone / tablet / desktop browser
        │ HTTPS
        ▼
-Nginx Proxy Manager ──> Nginx frontend gateway ──> Angular app
-                                      │ /api, /oauth2, /login
-                                      ▼ private network
-                                  Spring Boot API ──> PostgreSQL
-                                      ├─ Google identity verification
-                                      └─ account-scoped authorization
+Debian host Nginx ──> 127.0.0.1:8188 frontend gateway ──> Angular app
+                                                        │ /api, /oauth2, /login
+                                                        ▼ private network
+                                                    Spring Boot API ──> PostgreSQL
+                                                        ├─ Google identity verification
+                                                        └─ account-scoped authorization
+
+Nginx Proxy Manager remains separate for existing media services.
 ```
 
-The owner already uses Nginx Proxy Manager in Docker as a reverse proxy; it shares `media-stack_default` with Jellyseerr. The movie application is isolated from that media network by the production Compose design: only its Nginx gateway joins the dedicated external `movies-proxy` network, while the backend and PostgreSQL remain on private application networks. NPM must join the dedicated network during a planned maintenance step. Production uses same-origin paths and HTTPS.
+The owner's Debian host Nginx listens on public ports 80/443 and already serves `ask.jlloyd.fr` and `watch.jlloyd.fr` as separate virtual hosts. Router forwarding for those standard ports remains unchanged. The movie frontend gateway is published only on host loopback `127.0.0.1:8188`; host Nginx routes the `jlloyd.fr` virtual host to it. The gateway and backend communicate over the production Compose private network; PostgreSQL and backend ports are not published. Nginx Proxy Manager remains on host ports 8888/4443/81, attached to `media-stack_default`, and is not changed or joined to the movie app. Production uses same-origin paths and HTTPS.
 
 ## Product data model (target)
 
@@ -66,7 +68,7 @@ The owner already uses Nginx Proxy Manager in Docker as a reverse proxy; it shar
 - Add and edit forms use a two-column layout for Title and Year, followed by a full-width rating control. The edit form uses a segmented set of score buttons; clicking the selected score again clears the rating. The add form currently uses a dropdown. Invalid edit submissions show title/year validation messages below their respective inputs.
 - Active title or rating filters that return no results display “No matching movies.” Subtle panel and overlay animations respect `prefers-reduced-motion`.
 - Theme defaults to `prefers-color-scheme`; manual override is stored in local storage on that browser. Cross-device account preference persistence is not implemented.
-- Angular's development server proxies `/api`, `/oauth2`, and `/login` to `http://localhost:8080`. Production builds use `/movies/` as the app base path; movie endpoints are under `/api/movies` so they do not conflict with the site path. NPM routes the site and API prefixes to the frontend gateway; it proxies API/OAuth requests to the backend over the private app network.
+- Angular's development server proxies `/api`, `/oauth2`, and `/login` to `http://localhost:8080`. Production builds use `/movies/` as the app base path; movie endpoints are under `/api/movies` so they do not conflict with the site path. Host Nginx routes the apex domain to the loopback-bound frontend gateway, which proxies API/OAuth requests to the backend over the private app network.
 - Recommendation lookup is not implemented.
 
 ## Persistence (current implementation and target)
@@ -86,7 +88,7 @@ The owner already uses Nginx Proxy Manager in Docker as a reverse proxy; it shar
 | Angular client | Google sign-in experience, responsive compact movie catalog UI, CRUD, title/rating filters, three movie suggestions, and light/dark theme. Default theme follows the device; a manual choice is saved to the account and follows it across devices. |
 | Spring Boot API | Authenticate/verify signed-in Google identities, enforce the server-side allowlist, scope every movie operation to its account, validate movie data, expose catalog operations, and broker recommendation lookups using five randomly selected account-owned movies rated 8–10 without exposing API credentials to the browser. |
 | PostgreSQL | Persist account identity/access settings, per-account movie records, and account theme preference in a database dedicated to this application. |
-| Owner's server/network | Host the application and dedicated database with Docker Compose; Nginx Proxy Manager is the existing reverse proxy. Expose the app through the owner's domain using HTTPS. A dedicated proxy network will isolate it from the existing media-services network. |
+| Owner's server/network | Host the application and dedicated database with Docker Compose. Debian host Nginx terminates HTTPS and routes the app; the gateway binds only to loopback. Keep NPM and the existing media-services network unchanged. |
 | Recommendation API (proposed) | Resolve selected highly rated catalog movies to provider movie IDs and return recommendation candidates. The application combines results, removes entries already in the user's catalog, and returns three distinct suggestions. Provider, result-ranking strategy, and attribution UI remain open. |
 
 ## Current API contract
@@ -108,7 +110,7 @@ Every route that reads or changes account data enforces authentication and accou
 
 - Decide the secure deployment mechanism for the server-side allowlist configuration; do not store actual account identifiers in tracked documentation or source.
 - Define account lifecycle behavior if a Google account email changes; persistence uses the stable Google `sub` claim while the allowlist currently matches verified email.
-- Configure and verify the Nginx Proxy Manager routes, trusted network, and HTTPS callback on the owner's server.
+- Configure and verify the host Nginx `jlloyd.fr` virtual host, loopback gateway, Let's Encrypt certificate, and HTTPS callback on the owner's server.
 - Plan the production Liquibase rollout against the production database state.
 - Define HTTPS termination, secret storage, backups/restore, logs, and health monitoring in the deployment plan.
 - Choose the movie recommendation provider, define how provider results are ranked and deduplicated, and document the provider's privacy, attribution, and failure behavior.

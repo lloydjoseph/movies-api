@@ -1,6 +1,6 @@
 # Decision: Self-hosted Compose deployment
 
-- Status: Accepted
+- Status: Superseded for ingress routing; remaining deployment decisions are still accepted
 - Date: 2026-10-29
 
 ## Context
@@ -12,15 +12,14 @@ The owner operates a Debian 13 home server and already runs Docker services behi
 - Continue with the repository's intended stack: Angular/TypeScript, Java 21/Spring Boot, and PostgreSQL.
 - Host the application on the owner's server using Docker Compose. The movie app will have its own PostgreSQL container and persistent database storage.
 - Keep the production Compose definition version-controlled in this repository. Server-only configuration and credentials stay outside Git.
-- Isolate the movie app's public web entry point from the existing media-services Docker network by using a dedicated proxy network shared with Nginx Proxy Manager. Keep backend and database traffic on private app networks. Do not rename or repurpose the existing media network.
+- Isolate the movie app from the existing media-services Docker network. The ingress routing choice in this decision was superseded after inspecting the server; see [host Nginx ingress](2026-10-30-host-nginx-movie-ingress.md).
 - Use manual deployments. Automated build/deploy workflows are not justified by the expected low release frequency.
 - The private GitHub repository will be cloned to `/home/joseph/movies-api` using a repository-scoped read-only deploy key kept on the server.
 
 ## Consequences
 
-- The Nginx Proxy Manager Compose configuration must be updated to join the dedicated proxy network, then recreated during a planned maintenance step; this may briefly interrupt proxy service.
-- The public app path is now agreed as `https://jlloyd.fr/movies/`; the existing router rules and NPM host port mappings still need audit before they are changed.
-- `docker-compose.production.yml` defines the frontend gateway, backend, private PostgreSQL service, and required external `movies-proxy` network. The production environment-file path, live NPM route setup, backup location, and restore procedure still need to be finalized before a production release.
+- The public app path is `https://jlloyd.fr/movies/`. Host Nginx serves the domain; do not change existing router rules or NPM configuration.
+- `docker-compose.production.yml` defines the frontend gateway, backend, and private PostgreSQL service. The production environment file, backup location, data migration, and restore procedure must be completed before production cutover.
 - Manual release steps and database backup guidance are recorded in the [deployment guide](../deployment-guide.md).
 
 ## Alternatives considered

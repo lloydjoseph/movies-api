@@ -99,7 +99,7 @@ The backend test suite uses Testcontainers to start a disposable PostgreSQL 17 d
 - Record whether IntelliJ uses WSL toolchains for Java and Node if useful for onboarding; the versions reported so far were checked in Ubuntu WSL.
 - Keep local credentials in the ignored environment file described above; do not move them back into tracked application properties.
 - Record numeric developer hardware requirements only after measuring or defining the intended supported setup.
-- The local Compose file is under `backend/`. `docker-compose.production.yml` defines the production stack and depends on the external `movies-proxy` network and protected environment file.
+- The local Compose file is under `backend/`. `docker-compose.production.yml` defines the production stack, binds its frontend gateway to host loopback `127.0.0.1:8188` for the existing host Nginx, and uses a protected environment file.
 
 Angular compatibility reference: [Angular version compatibility](https://angular.dev/reference/versions). Recheck this table when upgrading Angular or changing the Node.js version.
 

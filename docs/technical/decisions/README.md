@@ -5,7 +5,8 @@ Record decisions that are expensive to rediscover or likely to affect later work
 ## Decision index
 
 - [2026-10-29: Account isolation and movie data](2026-10-29-account-isolation-and-movie-data.md) — accepted product and data-model constraints.
-- [2026-10-29: Self-hosted Compose deployment](2026-10-29-self-hosted-compose-deployment.md) — accepted hosting, network isolation, release, and source-access approach.
+- [2026-10-29: Self-hosted Compose deployment](2026-10-29-self-hosted-compose-deployment.md) — accepted stack, release, and source-access approach; ingress routing was superseded.
+- [2026-10-30: Host Nginx movie ingress](2026-10-30-host-nginx-movie-ingress.md) — route the app through existing host Nginx without changing NPM or media services.
 
 The current stack was also confirmed as the intended stack by the owner; the exact versions visible in the repository are documented in [architecture](../architecture.md).
 

@@ -39,7 +39,7 @@ Updated: 2026-10-30
 - Active title or rating filters with no results show “No matching movies.” Frontend currently has 8 passing tests and `npm run build` succeeds.
 - Backend database properties now require `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`. Local development uses an ignored `backend/.env` and the `local` profile. Production OAuth callback URLs use forwarded headers only in the `production` profile; keep backend traffic restricted to the trusted proxy network.
 - Product direction: “Joseph’s Movies”, orange accent, Fira Sans, larger relative text, and Tailwind styling. Production URL: `https://jlloyd.fr/movies/`. The app build uses that base path; movie APIs are under `/api/movies` to avoid a URL collision. Configure production `APP_FRONTEND_URL=https://jlloyd.fr/movies/`.
-- The repository includes production Dockerfiles, a private-network Compose stack, and an Nginx gateway with security headers. The server still needs its proxy network and NPM routes, protected production environment file, OAuth callback, data migration, and a tested backup/restore procedure.
+- The repository includes production Dockerfiles, a private-network Compose stack, and an Nginx gateway with security headers. The agreed ingress is Debian host Nginx proxying to the gateway on `127.0.0.1:8188`; do not change the router rules, NPM, or media network. The server still needs the apex certificate, protected production environment file, OAuth callback, data migration, and a tested backup/restore procedure.
 - One CSV title differed from the database only by a leading space. The backfill did not update titles, preserving the database's original title.
 
 ## Next steps
@@ -48,7 +48,7 @@ Updated: 2026-10-30
 2. Restart the backend with `SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run` and verify the signed-in movie list loads without the `lower(bytea)` SQL error. Then manually verify search, filters, and CRUD.
 3. Commit the pending query fix only after reviewing the diff. Keep `backend/.m2/` out of Git.
 4. Configure the reverse proxy and production OAuth callback for `jlloyd.fr/movies/`; set `APP_FRONTEND_URL=https://jlloyd.fr/movies/`.
-5. Remaining product work is cross-device theme preference and movie recommendations. Production work also includes NPM routes/network, production secrets, source data migration, and a verified backup/restore process.
+5. Remaining product work is cross-device theme preference and movie recommendations. Production work also includes host-Nginx certificate/site setup, production secrets, source data migration, and a verified backup/restore process.
 
 ## Repository notes
 

@@ -21,7 +21,7 @@ Open <http://localhost:4200>. The Angular development proxy forwards `/api`, `/o
 npm run build
 ```
 
-The production build uses `/movies/` as its base path for `https://jlloyd.fr/movies/`. Configure `APP_FRONTEND_URL=https://jlloyd.fr/movies/` on the backend. Nginx Proxy Manager routes `/movies` (with or without the trailing slash), `/api/`, `/oauth2/`, and `/login/` to the frontend gateway; that gateway serves the app and proxies API/OAuth requests privately to Spring Boot on the same origin. The production gateway supplies security response headers and fixed forwarded host/protocol values. Production deployment still requires the `movies-proxy` network, NPM routes, protected environment file, production OAuth callback, and verified database backup/restore on the server.
+The production build uses `/movies/` as its base path for `https://jlloyd.fr/movies/`. Configure `APP_FRONTEND_URL=https://jlloyd.fr/movies/` on the backend. Debian host Nginx routes the apex domain to the frontend gateway bound at `127.0.0.1:8188`; the gateway serves the app and proxies API/OAuth requests privately to Spring Boot on the same origin. The production gateway supplies security response headers and fixed forwarded host/protocol values. Production deployment still requires an apex certificate, protected environment file, production OAuth callback, and verified database backup/restore on the server. Nginx Proxy Manager and the media stack remain unchanged.
 
 Theme overrides are stored in this browser's local storage. The current backend does not synchronize theme preferences across devices.
 
