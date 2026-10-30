@@ -33,4 +33,4 @@ Run checks relevant to the change when asked to verify it, or when verification 
 ## Current scope notes
 
 - Google OIDC login/session handling and account-scoped movie CRUD are implemented. Google credentials and the verified-email allowlist are environment supplied; an empty allowlist denies access. Each allowlisted account has a separate catalog. The 345 existing local movies have release years and owner assignments; do not re-import the CSV. Liquibase has applied the local schema constraints; Hibernate validates the schema at startup. See [architecture](docs/technical/architecture.md), [data migration](docs/technical/data-migration.md), and [development setup](docs/technical/development-setup.md).
-- The root README currently gives only a brief project description; treat source code and module configuration as the detailed source of truth.
+- The root README provides the app overview, local launch steps, and links to the detailed product, architecture, migration, and deployment documentation.
