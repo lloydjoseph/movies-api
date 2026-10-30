@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @font-face {
   font-family: 'Fira Sans';
   font-style: normal;
@@ -77,11 +79,57 @@
 }
 
 @layer base {
-  html { min-width: 20rem; min-height: 100%; }
+  html {
+    min-width: 20rem;
+    min-height: 100%;
+    scrollbar-gutter: stable;
+    overflow-y: scroll;
+  }
   body { min-height: 100vh; margin: 0; }
   button, input, select { font: inherit; }
   button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
     outline: 2px solid #ea580c;
     outline-offset: 2px;
+  }
+}
+
+.hide-number-spinner {
+  -moz-appearance: textfield;
+}
+
+.hide-number-spinner::-webkit-inner-spin-button,
+.hide-number-spinner::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+@keyframes movie-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes movie-actions-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.movie-panel-enter {
+  animation: movie-panel-enter 160ms ease-out both;
+}
+
+.movie-actions-enter {
+  animation: movie-actions-enter 120ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .movie-panel-enter,
+  .movie-actions-enter {
+    animation: none;
   }
 }

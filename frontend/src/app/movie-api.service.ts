@@ -24,14 +24,25 @@ export interface MoviePage {
   hasNext: boolean;
 }
 
+export type MovieSort =
+  | 'rating_desc'
+  | 'rating_asc'
+  | 'year_desc'
+  | 'year_asc'
+  | 'title_asc'
+  | 'title_desc';
+
 export interface CatalogQuery {
   page: number;
   size: number;
   title: string;
-  ratingMode: 'all' | 'unrated' | 'exact' | 'range';
-  rating: number;
-  minRating: number;
-  maxRating: number;
+  sort: MovieSort;
+  ratings?: number[];
+  includeUnrated?: boolean;
+  ratingMode?: 'all' | 'unrated' | 'exact' | 'range';
+  rating?: number;
+  minRating?: number;
+  maxRating?: number;
 }
 
 export interface SignedInUser {
@@ -56,12 +67,25 @@ export class MovieApiService {
     let params = new HttpParams()
       .set('page', query.page)
       .set('size', query.size)
-      .set('ratingMode', query.ratingMode);
+      .set('sort', query.sort);
+
     const title = query.title.trim();
     if (title.length >= 3) params = params.set('q', title);
-    if (query.ratingMode === 'exact') params = params.set('rating', query.rating);
-    if (query.ratingMode === 'range') {
-      params = params.set('minRating', query.minRating).set('maxRating', query.maxRating);
+
+    if (query.ratings && query.ratings.length > 0) {
+      params = params.set('ratings', query.ratings.join(','));
+    }
+    if (query.includeUnrated) {
+      params = params.set('includeUnrated', 'true');
+    }
+    if (query.ratingMode && !query.ratings?.length && !query.includeUnrated) {
+      params = params.set('ratingMode', query.ratingMode);
+      if (query.ratingMode === 'exact' && query.rating !== undefined) {
+        params = params.set('rating', query.rating);
+      }
+      if (query.ratingMode === 'range' && query.minRating !== undefined && query.maxRating !== undefined) {
+        params = params.set('minRating', query.minRating).set('maxRating', query.maxRating);
+      }
     }
     return firstValueFrom(this.http.get<MoviePage>('/api/movies', { params }));
   }

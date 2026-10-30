@@ -35,4 +35,172 @@ describe('App', () => {
     expect(rendered.querySelector('h1')?.textContent).toContain('Movies');
     expect(rendered.textContent).toContain('Arrival');
   });
+
+  it('renders sort controls and defaults to rating descending', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const app = fixture.componentInstance;
+    expect(app.sortBy()).toBe('rating_desc');
+    expect(app.sortArrow('rating')).toBe('↓');
+    expect(app.sortArrow('year')).toBe('↕');
+    expect(app.sortArrow('title')).toBe('↕');
+
+    app.toggleSort('rating');
+    expect(app.sortBy()).toBe('rating_asc');
+    expect(app.sortArrow('rating')).toBe('↑');
+
+    app.toggleSort('year');
+    expect(app.sortBy()).toBe('year_desc');
+    expect(app.sortArrow('year')).toBe('↓');
+    expect(app.sortArrow('rating')).toBe('↕');
+  });
+
+  it('allows toggling rating number filters', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const app = fixture.componentInstance;
+    expect(app.isAllSelected()).toBe(true);
+
+    app.toggleRating(9);
+    expect(app.isAllSelected()).toBe(false);
+    expect(app.isRatingSelected(9)).toBe(true);
+    expect(app.isRatingSelected(8)).toBe(false);
+
+    app.toggleRating(8);
+    expect(app.isRatingSelected(9)).toBe(true);
+    expect(app.isRatingSelected(8)).toBe(true);
+
+    app.selectAllRatings();
+    expect(app.isAllSelected()).toBe(true);
+  });
+
+  it('shows and hides mobile movie actions from the movie row', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const rendered = fixture.nativeElement as HTMLElement;
+    const movieRow = rendered.querySelector<HTMLButtonElement>('button[aria-label="Actions for Arrival"]');
+    expect(movieRow).not.toBeNull();
+
+    movieRow?.click();
+    fixture.detectChanges();
+    expect(movieRow?.getAttribute('aria-expanded')).toBe('true');
+    expect(rendered.querySelector('button[aria-label="Edit Arrival"]')).not.toBeNull();
+    expect(rendered.querySelector('button[aria-label="Remove Arrival"]')).not.toBeNull();
+
+    rendered.querySelector<HTMLButtonElement>('button[aria-label="Close movie actions"]')?.click();
+    fixture.detectChanges();
+    expect(movieRow?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('shows a matching-movies message when active filters return no results', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const app = fixture.componentInstance;
+    app.movies.set([]);
+    app.totalItems.set(0);
+    app.query.set('unknown title');
+    fixture.detectChanges();
+
+    const rendered = fixture.nativeElement as HTMLElement;
+    expect(rendered.textContent).toContain('No matching movies.');
+    expect(rendered.textContent).not.toContain('Add a movie to get started.');
+  });
+
+  it('opens the edit form in place of the selected movie row', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const rendered = fixture.nativeElement as HTMLElement;
+    rendered.querySelector<HTMLButtonElement>('button[aria-label="Actions for Arrival"]')?.click();
+    fixture.detectChanges();
+    rendered.querySelector<HTMLButtonElement>('button[aria-label="Edit Arrival"]')?.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const inlineEditor = rendered.querySelector<HTMLElement>('[aria-labelledby="inline-editor-heading"]');
+    expect(inlineEditor).not.toBeNull();
+    expect(inlineEditor?.closest('li')).not.toBeNull();
+    expect(inlineEditor?.querySelector<HTMLInputElement>('input[name="title"]')?.value).toBe('Arrival');
+    expect(inlineEditor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 9"]')?.getAttribute('aria-pressed')).toBe('true');
+    inlineEditor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.click();
+    fixture.detectChanges();
+    expect(inlineEditor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.getAttribute('aria-pressed')).toBe('true');
+    inlineEditor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.click();
+    fixture.detectChanges();
+    expect(inlineEditor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.getAttribute('aria-pressed')).toBe('false');
+    expect(rendered.querySelector('[aria-labelledby="editor-heading"]')).toBeNull();
+
+    Array.from(inlineEditor?.querySelectorAll<HTMLButtonElement>('button[type="button"]') ?? [])
+      .find(button => button.textContent?.trim() === 'Cancel')
+      ?.click();
+    fixture.detectChanges();
+    expect(rendered.querySelector('[aria-labelledby="inline-editor-heading"]')).toBeNull();
+    expect(rendered.querySelector('button[aria-label="Actions for Arrival"]')).not.toBeNull();
+  });
+
+  it('shows delete confirmation in place of the selected movie row', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const rendered = fixture.nativeElement as HTMLElement;
+    rendered.querySelector<HTMLButtonElement>('button[aria-label="Actions for Arrival"]')?.click();
+    fixture.detectChanges();
+    rendered.querySelector<HTMLButtonElement>('button[aria-label="Remove Arrival"]')?.click();
+    fixture.detectChanges();
+
+    const confirmation = rendered.querySelector<HTMLElement>('[aria-labelledby="delete-heading"]');
+    expect(confirmation).not.toBeNull();
+    expect(confirmation?.closest('li')).not.toBeNull();
+    expect(confirmation?.textContent).toContain('Remove “Arrival”?');
+    expect(rendered.querySelector('button[aria-label="Actions for Arrival"]')).toBeNull();
+
+    confirmation?.querySelector<HTMLButtonElement>('button[type="button"]')?.click();
+    fixture.detectChanges();
+    expect(rendered.querySelector('[aria-labelledby="delete-heading"]')).toBeNull();
+    expect(rendered.querySelector('button[aria-label="Actions for Arrival"]')).not.toBeNull();
+  });
+
+  it('shows edit field errors after saving with empty required fields', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const rendered = fixture.nativeElement as HTMLElement;
+    rendered.querySelector<HTMLButtonElement>('button[aria-label="Actions for Arrival"]')?.click();
+    fixture.detectChanges();
+    rendered.querySelector<HTMLButtonElement>('button[aria-label="Edit Arrival"]')?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const inlineEditor = rendered.querySelector<HTMLElement>('[aria-labelledby="inline-editor-heading"]');
+    const titleInput = inlineEditor?.querySelector<HTMLInputElement>('input[name="title"]');
+    const yearInput = inlineEditor?.querySelector<HTMLInputElement>('input[name="releaseYear"]');
+    expect(titleInput).not.toBeNull();
+    expect(yearInput).not.toBeNull();
+
+    if (titleInput && yearInput) {
+      titleInput.value = '';
+      titleInput.dispatchEvent(new Event('input'));
+      yearInput.value = '';
+      yearInput.dispatchEvent(new Event('input'));
+    }
+    await fixture.whenStable();
+    fixture.detectChanges();
+    inlineEditor?.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+    fixture.detectChanges();
+
+    expect(inlineEditor?.textContent).toContain('Enter a movie title.');
+    expect(inlineEditor?.textContent).toContain('Enter a valid release year.');
+  });
 });

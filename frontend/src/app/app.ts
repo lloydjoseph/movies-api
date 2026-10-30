@@ -1,10 +1,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { CatalogQuery, Movie, MovieApiService, MovieInput, SignedInUser } from './movie-api.service';
+import { CatalogQuery, Movie, MovieApiService, MovieInput, MovieSort, SignedInUser } from './movie-api.service';
 
 type Theme = 'light' | 'dark';
-type RatingFilter = 'all' | 'unrated' | 'exact' | 'range';
 
 @Component({
   selector: 'app-root',
@@ -25,13 +24,13 @@ export class App {
   readonly saving = signal(false);
   readonly error = signal(this.loginFailureMessage());
   readonly query = signal('');
-  readonly ratingFilter = signal<RatingFilter>('all');
-  readonly exactRating = signal(8);
-  readonly rangeStart = signal(1);
-  readonly rangeEnd = signal(10);
+  readonly sortBy = signal<MovieSort>('rating_desc');
+  readonly selectedRatings = signal<number[]>([]);
+  readonly includeUnrated = signal<boolean>(false);
   readonly editorOpen = signal(false);
   readonly editingMovie = signal<Movie | null>(null);
   readonly deletingMovie = signal<Movie | null>(null);
+  readonly activeMovieActionsId = signal<number | null>(null);
   readonly theme = signal<Theme>(this.readThemePreference());
 
   title = '';
@@ -81,7 +80,18 @@ export class App {
   toggleTheme(): void {
     const nextTheme = this.theme() === 'dark' ? 'light' : 'dark';
     this.theme.set(nextTheme);
-    localStorage.setItem('josephs-movies-theme', nextTheme);
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('josephs-movies-theme', nextTheme);
+      }
+    } catch {
+      // Ignore if localStorage unavailable
+    }
+  }
+
+  onSortChange(value: string): void {
+    this.sortBy.set(value as MovieSort);
+    void this.loadMovies(true);
   }
 
   openCreateForm(): void {
@@ -92,12 +102,33 @@ export class App {
     this.editorOpen.set(true);
   }
 
-  openEditForm(movie: Movie): void {
-    this.editingMovie.set(movie);
-    this.title = movie.name;
-    this.releaseYear = movie.releaseYear;
-    this.rating = movie.rating;
-    this.editorOpen.set(true);
+  openEditForm(movie: Movie, event?: Event): void {
+    this.transitionMovieRow(event, () => {
+      this.activeMovieActionsId.set(null);
+      this.deletingMovie.set(null);
+      this.editingMovie.set(movie);
+      this.title = movie.name;
+      this.releaseYear = movie.releaseYear;
+      this.rating = movie.rating;
+      this.editorOpen.set(true);
+    });
+  }
+
+  requestDelete(movie: Movie, event?: Event): void {
+    this.transitionMovieRow(event, () => {
+      this.activeMovieActionsId.set(null);
+      this.editingMovie.set(null);
+      this.editorOpen.set(false);
+      this.deletingMovie.set(movie);
+    });
+  }
+
+  cancelDelete(event?: Event): void {
+    this.transitionMovieRow(event, () => this.deletingMovie.set(null));
+  }
+
+  toggleMovieActions(movieId: number): void {
+    this.activeMovieActionsId.update(current => current === movieId ? null : movieId);
   }
 
   onQueryChange(value: string): void {
@@ -106,36 +137,143 @@ export class App {
     this.queryTimer = setTimeout(() => void this.loadMovies(true), 250);
   }
 
-  onRatingModeChange(value: string): void {
-    this.ratingFilter.set(value as RatingFilter);
+  isAllSelected(): boolean {
+    return this.selectedRatings().length === 0 && !this.includeUnrated();
+  }
+
+  isRatingSelected(score: number): boolean {
+    return this.selectedRatings().includes(score);
+  }
+
+  isUnratedSelected(): boolean {
+    return this.includeUnrated();
+  }
+
+  selectAllRatings(): void {
+    this.selectedRatings.set([]);
+    this.includeUnrated.set(false);
     void this.loadMovies(true);
   }
 
-  onExactRatingChange(value: number): void {
-    this.exactRating.set(Number(value));
+  toggleRating(score: number): void {
+    const current = this.selectedRatings();
+    if (current.includes(score)) {
+      this.selectedRatings.set(current.filter(s => s !== score));
+    } else {
+      this.selectedRatings.set([...current, score].sort((a, b) => b - a));
+    }
     void this.loadMovies(true);
   }
 
-  onRangeStartChange(value: number): void {
-    const start = Number(value);
-    this.rangeStart.set(start);
-    if (start > this.rangeEnd()) this.rangeEnd.set(start);
+  toggleUnrated(): void {
+    this.includeUnrated.update(val => !val);
     void this.loadMovies(true);
   }
 
-  onRangeEndChange(value: number): void {
-    const end = Number(value);
-    this.rangeEnd.set(end);
-    if (end < this.rangeStart()) this.rangeStart.set(end);
+  setSort(sort: MovieSort): void {
+    this.sortBy.set(sort);
     void this.loadMovies(true);
+  }
+
+  sortArrow(field: 'rating' | 'year' | 'title'): string {
+    const current = this.sortBy();
+    if (field === 'rating') {
+      if (current === 'rating_desc') return '↓';
+      if (current === 'rating_asc') return '↑';
+      return '↕';
+    }
+    if (field === 'year') {
+      if (current === 'year_desc') return '↓';
+      if (current === 'year_asc') return '↑';
+      return '↕';
+    }
+    if (field === 'title') {
+      if (current === 'title_asc') return '↑';
+      if (current === 'title_desc') return '↓';
+      return '↕';
+    }
+    return '↕';
+  }
+
+  toggleSort(field: 'rating' | 'year' | 'title'): void {
+    const current = this.sortBy();
+    if (field === 'rating') {
+      this.setSort(current === 'rating_desc' ? 'rating_asc' : 'rating_desc');
+    } else if (field === 'year') {
+      this.setSort(current === 'year_desc' ? 'year_asc' : 'year_desc');
+    } else if (field === 'title') {
+      this.setSort(current === 'title_asc' ? 'title_desc' : 'title_asc');
+    }
   }
 
   loadMore(): void {
     if (this.hasNext() && !this.loadingMore()) void this.loadMovies(false);
   }
 
-  closeEditor(): void {
-    if (!this.saving()) this.editorOpen.set(false);
+  closeEditor(event?: Event): void {
+    if (this.saving()) return;
+
+    if (!this.editingMovie()) {
+      this.editorOpen.set(false);
+      return;
+    }
+
+    const target = event?.target;
+    const panel = target instanceof Element ? target.closest<HTMLElement>('.editor-panel') : null;
+    if (panel && typeof panel.animate === 'function' && !this.prefersReducedMotion()) {
+      const animation = panel.animate(
+        [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.96)' }],
+        { duration: 140, easing: 'ease-in', fill: 'forwards' },
+      );
+      animation.onfinish = () => this.collapseEditorRow(event);
+      return;
+    }
+
+    this.collapseEditorRow(event);
+  }
+
+  private collapseEditorRow(event?: Event): void {
+    this.transitionMovieRow(event, () => {
+      this.editorOpen.set(false);
+      this.editingMovie.set(null);
+    });
+  }
+
+  private prefersReducedMotion(): boolean {
+    return typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  private transitionMovieRow(event: Event | undefined, update: () => void): void {
+    const target = event?.target;
+    const row = target instanceof Element ? target.closest<HTMLElement>('[data-movie-row]') : null;
+    if (!row || typeof requestAnimationFrame !== 'function' || typeof row.animate !== 'function' || this.prefersReducedMotion()) {
+      update();
+      return;
+    }
+
+    const startHeight = row.getBoundingClientRect().height;
+    row.style.height = `${startHeight}px`;
+    row.style.overflow = 'hidden';
+    update();
+
+    requestAnimationFrame(() => {
+      if (!row.isConnected) return;
+      row.style.height = 'auto';
+      const endHeight = row.getBoundingClientRect().height;
+      row.style.height = `${startHeight}px`;
+      void row.offsetHeight;
+
+      const animation = row.animate(
+        [{ height: `${startHeight}px` }, { height: `${endHeight}px` }],
+        { duration: 180, easing: 'ease-in-out' },
+      );
+      animation.onfinish = () => {
+        row.style.height = '';
+        row.style.overflow = '';
+      };
+    });
   }
 
   async saveMovie(): Promise<void> {
@@ -197,9 +335,10 @@ export class App {
     if (reset) {
       this.loadingMovies.set(true);
       this.loadingMore.set(false);
-      this.movies.set([]);
-      this.totalItems.set(0);
-      this.hasNext.set(false);
+      if (this.movies().length === 0) {
+        this.totalItems.set(0);
+        this.hasNext.set(false);
+      }
     } else {
       this.loadingMore.set(true);
     }
@@ -209,10 +348,9 @@ export class App {
       page: requestedPage,
       size: this.pageSize,
       title: this.query(),
-      ratingMode: this.ratingFilter(),
-      rating: this.exactRating(),
-      minRating: this.rangeStart(),
-      maxRating: this.rangeEnd(),
+      ratings: this.selectedRatings(),
+      includeUnrated: this.includeUnrated(),
+      sort: this.sortBy(),
     };
 
     try {
@@ -256,9 +394,18 @@ export class App {
   }
 
   private readThemePreference(): Theme {
-    const savedTheme = localStorage.getItem('josephs-movies-theme');
-    if (savedTheme === 'dark' || savedTheme === 'light') return savedTheme;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const savedTheme = localStorage.getItem('josephs-movies-theme');
+        if (savedTheme === 'dark' || savedTheme === 'light') return savedTheme;
+      }
+      if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+    } catch {
+      // Fallback if environment lacks window or localStorage
+    }
+    return 'light';
   }
 
   private loginFailureMessage(): string {

@@ -7,11 +7,11 @@
           @if (user(); as account) {
             <span class="hidden max-w-52 truncate text-sm text-stone-600 dark:text-neutral-300 sm:inline">{{ account.name || account.email }}</span>
           }
-          <button class="rounded-md border border-stone-300 px-3 py-2 text-sm font-medium hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="toggleTheme()" [attr.aria-label]="theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'">
+          <button class="cursor-pointer rounded-md border border-stone-300 px-3 py-2 text-sm font-medium hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="toggleTheme()" [attr.aria-label]="theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'">
             <span aria-hidden="true">{{ theme() === 'dark' ? '☼' : '☾' }}</span>
           </button>
           @if (user()) {
-            <button class="text-sm font-medium text-stone-600 underline-offset-4 hover:text-orange-700 hover:underline dark:text-neutral-300" type="button" (click)="signOut()">Sign out</button>
+            <button class="cursor-pointer text-sm font-medium text-stone-600 underline-offset-4 hover:text-orange-700 hover:underline dark:text-neutral-300" type="button" (click)="signOut()">Sign out</button>
           }
         </div>
       </div>
@@ -24,7 +24,7 @@
         <h1 class="text-4xl font-semibold tracking-tight sm:text-5xl">Joseph’s Movies</h1>
         <p class="mt-5 text-lg leading-relaxed text-stone-600 dark:text-neutral-300">Sign in to view and manage the movie collection.</p>
         @if (error()) { <p class="mt-6 rounded-md border border-red-300 bg-red-50 p-4 text-base text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">{{ error() }}</p> }
-        <button class="mt-8 inline-flex min-h-12 items-center gap-3 rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700" type="button" (click)="beginSignIn()">
+        <button class="mt-8 inline-flex min-h-12 cursor-pointer items-center gap-3 rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700" type="button" (click)="beginSignIn()">
           <span aria-hidden="true" class="font-bold">G</span> Sign in with Google
         </button>
       </section>
@@ -35,85 +35,205 @@
             <h1 class="text-4xl font-semibold tracking-tight sm:text-5xl">Movies</h1>
             <p class="mt-2 text-base text-stone-600 dark:text-neutral-300">{{ totalItems() }} {{ totalItems() === 1 ? 'film' : 'films' }}</p>
           </div>
-          <button class="inline-flex min-h-12 items-center justify-center gap-2 self-start rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 sm:self-auto" type="button" (click)="openCreateForm()"><span aria-hidden="true" class="text-xl">+</span> Add movie</button>
+          <button class="inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 self-start rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 sm:self-auto" type="button" (click)="openCreateForm()"><span aria-hidden="true" class="text-xl">+</span> Add movie</button>
         </div>
 
         @if (error()) {
           <div class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-300 bg-red-50 p-4 text-base text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">
-            <span>{{ error() }}</span><button class="font-semibold underline" type="button" (click)="loadSession()">Retry</button>
+            <span>{{ error() }}</span><button class="cursor-pointer font-semibold underline" type="button" (click)="loadSession()">Retry</button>
           </div>
         }
 
-        @if (editorOpen()) {
-          <section class="mt-8 rounded-lg border border-stone-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 sm:p-7" aria-labelledby="editor-heading">
+        @if (editorOpen() && !editingMovie()) {
+          <section class="movie-panel-enter mt-8 rounded-lg border border-stone-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900 sm:p-7" aria-labelledby="editor-heading">
             <div class="flex items-start justify-between gap-4">
               <div><h2 id="editor-heading" class="text-2xl font-semibold">{{ editingMovie() ? 'Edit movie' : 'Add a movie' }}</h2><p class="mt-1 text-base text-stone-600 dark:text-neutral-300">Title and release year are required.</p></div>
-              <button class="rounded px-2 py-1 text-2xl leading-none text-stone-600 hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 dark:hover:bg-neutral-800" type="button" aria-label="Close form" (click)="closeEditor()">×</button>
             </div>
-            <form class="mt-6 grid gap-5 sm:grid-cols-3" #movieForm="ngForm" (ngSubmit)="saveMovie()">
-              <label class="flex flex-col gap-2 text-base font-medium sm:col-span-3">Title
+            <form class="mt-6 grid grid-cols-2 gap-4" #movieForm="ngForm" (ngSubmit)="saveMovie()">
+              <label class="col-span-2 flex flex-col gap-2 text-base font-medium">Title
                 <input class="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="title" required maxlength="255" [(ngModel)]="title" placeholder="Movie title">
               </label>
-              <label class="flex flex-col gap-2 text-base font-medium">Release year
+              <label class="flex min-w-0 flex-col gap-2 text-base font-medium">Release year
                 <input class="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950" name="releaseYear" required type="number" min="1" max="9999" [(ngModel)]="releaseYear">
               </label>
-              <label class="flex flex-col gap-2 text-base font-medium">Rating <span class="font-normal text-stone-600 dark:text-neutral-300">Optional</span>
+              <label class="flex min-w-0 flex-col gap-2 text-base font-medium">Rating
                 <select class="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950" name="rating" [(ngModel)]="rating"><option [ngValue]="null">Unrated</option>@for (score of [10,9,8,7,6,5,4,3,2,1]; track score) { <option [ngValue]="score">{{ score }} / 10</option> }</select>
               </label>
-              <div class="flex flex-wrap items-center justify-end gap-3 sm:col-span-3">
-                <button class="min-h-12 rounded-md border border-stone-300 px-5 text-base font-medium hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="closeEditor()">Cancel</button>
-                <button class="min-h-12 rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700" type="submit" [disabled]="movieForm.invalid || saving()">{{ saving() ? 'Saving…' : editingMovie() ? 'Save changes' : 'Add movie' }}</button>
+              <div class="col-span-2 flex flex-wrap items-center justify-end gap-3">
+                <button class="min-h-12 cursor-pointer rounded-md border border-stone-300 px-5 text-base font-medium hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="closeEditor($event)">Cancel</button>
+                <button class="min-h-12 cursor-pointer rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700" type="submit" [disabled]="movieForm.invalid || saving()">{{ saving() ? 'Saving…' : editingMovie() ? 'Save changes' : 'Add movie' }}</button>
               </div>
             </form>
           </section>
         }
 
-        @if (deletingMovie(); as movie) {
-          <section class="mt-6 flex flex-col gap-4 rounded-lg border border-red-300 bg-red-50 p-5 dark:border-red-900 dark:bg-red-950 sm:flex-row sm:items-center sm:justify-between" aria-labelledby="delete-heading">
-            <div><h2 id="delete-heading" class="text-lg font-semibold text-red-950 dark:text-red-100">Remove “{{ movie.name }}”?</h2><p class="mt-1 text-base text-red-900 dark:text-red-200">This cannot be undone.</p></div>
-            <div class="flex gap-3"><button class="min-h-11 rounded-md border border-stone-300 px-4 text-base font-medium dark:border-neutral-700" type="button" (click)="deletingMovie.set(null)">Cancel</button><button class="min-h-11 rounded-md bg-red-700 px-4 text-base font-semibold text-white hover:bg-red-800" type="button" (click)="confirmDelete()">Remove movie</button></div>
-          </section>
-        }
-
         <section class="mt-9" aria-label="Movie collection">
-          <div class="flex flex-col gap-4 border-b border-stone-300 pb-5 dark:border-neutral-700 sm:flex-row sm:items-center">
-            <label class="flex min-h-12 flex-1 items-center gap-3 rounded-md border border-stone-300 bg-white px-3 dark:border-neutral-700 dark:bg-neutral-900">
-              <span aria-hidden="true" class="text-xl text-stone-500">⌕</span><span class="sr-only">Search movie titles</span>
-              <input class="min-w-0 flex-1 bg-transparent text-base placeholder:text-stone-500 focus:outline-none dark:placeholder:text-neutral-400" type="search" maxlength="100" placeholder="Search titles (3+ characters)" [ngModel]="query()" (ngModelChange)="onQueryChange($event)">
-            </label>
-            <div class="flex flex-wrap items-center gap-3">
-              <label class="text-base font-medium" for="rating-filter">Rating</label>
-              <select id="rating-filter" class="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base dark:border-neutral-700 dark:bg-neutral-900" [ngModel]="ratingFilter()" (ngModelChange)="onRatingModeChange($event)">
-                <option value="all">All</option><option value="unrated">Unrated</option><option value="exact">Exact</option><option value="range">Range</option>
-              </select>
-              @if (ratingFilter() === 'exact') {
-                <select aria-label="Exact rating" class="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base dark:border-neutral-700 dark:bg-neutral-900" [ngModel]="exactRating()" (ngModelChange)="onExactRatingChange($event)">@for (score of [10,9,8,7,6,5,4,3,2,1]; track score) { <option [ngValue]="score">{{ score }} / 10</option> }</select>
-              }
-              @if (ratingFilter() === 'range') {
-                <label class="sr-only" for="range-start">Minimum rating</label><select id="range-start" class="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base dark:border-neutral-700 dark:bg-neutral-900" [ngModel]="rangeStart()" (ngModelChange)="onRangeStartChange($event)">@for (score of [1,2,3,4,5,6,7,8,9,10]; track score) { <option [ngValue]="score">{{ score }}+</option> }</select>
-                <span aria-hidden="true" class="text-stone-500">to</span>
-                <label class="sr-only" for="range-end">Maximum rating</label><select id="range-end" class="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base dark:border-neutral-700 dark:bg-neutral-900" [ngModel]="rangeEnd()" (ngModelChange)="onRangeEndChange($event)">@for (score of [10,9,8,7,6,5,4,3,2,1]; track score) { <option [ngValue]="score">{{ score }}</option> }</select>
+          <div class="flex flex-col gap-4 border-b border-stone-300 pb-5 dark:border-neutral-700">
+            <div>
+              <label class="flex min-h-12 w-full items-center gap-3 rounded-md border border-stone-300 bg-white px-3 dark:border-neutral-700 dark:bg-neutral-900">
+                <span aria-hidden="true" class="text-xl text-stone-500">⌕</span><span class="sr-only">Search movie titles</span>
+                <input class="min-w-0 flex-1 bg-transparent text-base placeholder:text-stone-500 focus:outline-none dark:placeholder:text-neutral-400" type="search" maxlength="100" placeholder="Search titles (3+ characters)" [ngModel]="query()" (ngModelChange)="onQueryChange($event)">
+              </label>
+              @if (query().trim().length > 0 && query().trim().length < 3) {
+                <p class="pt-2 text-sm text-stone-600 dark:text-neutral-300">Enter at least 3 characters to filter by title.</p>
               }
             </div>
+
+            <div class="flex flex-wrap items-center gap-2 pt-1">
+              <span class="text-base font-medium text-stone-700 dark:text-neutral-300">Filter:</span>
+              <button type="button"
+                (click)="selectAllRatings()"
+                class="min-h-10 cursor-pointer rounded-md px-3.5 text-base font-medium transition-colors"
+                [class]="isAllSelected() ? 'bg-stone-900 text-white dark:bg-white dark:text-stone-900 font-semibold' : 'border border-stone-300 bg-white text-stone-700 hover:bg-stone-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800'">
+                All
+              </button>
+              <button type="button"
+                (click)="toggleUnrated()"
+                class="min-h-10 cursor-pointer rounded-md px-3.5 text-base font-medium transition-colors"
+                [class]="isUnratedSelected() ? 'bg-stone-900 text-white dark:bg-white dark:text-stone-900 font-semibold' : 'border border-stone-300 bg-white text-stone-700 hover:bg-stone-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800'">
+                Unrated
+              </button>
+
+              <span class="hidden sm:inline-block h-6 w-px bg-stone-300 dark:bg-neutral-700 mx-1" aria-hidden="true"></span>
+
+              <div class="flex flex-wrap items-center gap-1.5">
+                @for (score of [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]; track score) {
+                  <button type="button"
+                    (click)="toggleRating(score)"
+                    [attr.aria-pressed]="isRatingSelected(score)"
+                    class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-md text-base font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-orange-600"
+                    [style.background-color]="isRatingSelected(score) ? ratingColor(score) : ''"
+                    [style.color]="isRatingSelected(score) ? ratingTextColor(score) : ''"
+                    [class.border]="!isRatingSelected(score)"
+                    [class.border-stone-300]="!isRatingSelected(score)"
+                    [class.bg-white]="!isRatingSelected(score)"
+                    [class.dark:border-neutral-700]="!isRatingSelected(score)"
+                    [class.dark:bg-neutral-900]="!isRatingSelected(score)"
+                    [class.hover:bg-stone-100]="!isRatingSelected(score)"
+                    [class.dark:hover:bg-neutral-800]="!isRatingSelected(score)">
+                    {{ score }}
+                  </button>
+                }
+              </div>
+            </div>
           </div>
-          @if (query().trim().length > 0 && query().trim().length < 3) { <p class="pt-4 text-sm text-stone-600 dark:text-neutral-300">Enter at least 3 characters to filter by title.</p> }
-          @if (loadingMovies() && !loadingMore()) {
+          @if (loadingMovies() && !visibleMovies().length) {
             <p class="py-10 text-center text-base text-stone-600 dark:text-neutral-300" role="status">Loading movies…</p>
           } @else if (visibleMovies().length) {
-            <ul class="divide-y divide-stone-200 dark:divide-neutral-800">
-              @for (movie of visibleMovies(); track movie.id) {
-                <li class="flex items-center gap-3 py-4 sm:gap-5 sm:py-5">
-                  <div class="min-w-0 flex-1"><h2 class="truncate text-lg font-semibold leading-snug sm:text-xl">{{ movie.name }}</h2><p class="mt-1 text-base text-stone-600 dark:text-neutral-300">{{ movie.releaseYear }}</p></div>
-                  <span class="inline-flex min-w-20 items-center justify-center gap-1 rounded-md px-3 py-2 text-base font-semibold" [style.background-color]="ratingColor(movie.rating)" [style.color]="ratingTextColor(movie.rating)">{{ movie.rating === null ? 'Unrated' : movie.rating + ' / 10' }}</span>
-                  <div class="flex gap-1 sm:gap-2"><button class="min-h-11 rounded-md px-3 text-base font-medium text-stone-700 hover:bg-stone-200 focus-visible:outline-2 focus-visible:outline-orange-600 dark:text-neutral-200 dark:hover:bg-neutral-800" type="button" (click)="openEditForm(movie)" [attr.aria-label]="'Edit ' + movie.name">Edit</button><button class="min-h-11 rounded-md px-3 text-base font-medium text-red-700 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-red-700 dark:text-red-300 dark:hover:bg-red-950" type="button" (click)="deletingMovie.set(movie)" [attr.aria-label]="'Remove ' + movie.name">Remove</button></div>
-                </li>
-              }
-            </ul>
+            <div class="flex items-center gap-3 pt-4 pb-2 sm:gap-5 border-b border-stone-200 dark:border-neutral-800 text-sm font-semibold text-stone-500 dark:text-neutral-400 select-none">
+              <div class="min-w-0 flex-1 flex items-center gap-5 sm:gap-8">
+                <button type="button"
+                  (click)="toggleSort('title')"
+                  class="inline-flex cursor-pointer items-center gap-1.5 transition-colors hover:text-stone-900 dark:hover:text-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 rounded"
+                  [class.text-orange-600]="sortBy() === 'title_asc' || sortBy() === 'title_desc'"
+                  [class.dark:text-orange-500]="sortBy() === 'title_asc' || sortBy() === 'title_desc'"
+                  [class.font-bold]="sortBy() === 'title_asc' || sortBy() === 'title_desc'"
+                  [attr.aria-label]="'Sort by name, currently ' + (sortBy() === 'title_asc' ? 'A to Z' : sortBy() === 'title_desc' ? 'Z to A' : 'unsorted')">
+                  <span>Name</span>
+                  <span class="text-xs" aria-hidden="true">{{ sortArrow('title') }}</span>
+                </button>
+                <button type="button"
+                  (click)="toggleSort('year')"
+                  class="inline-flex cursor-pointer items-center gap-1.5 transition-colors hover:text-stone-900 dark:hover:text-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 rounded"
+                  [class.text-orange-600]="sortBy() === 'year_desc' || sortBy() === 'year_asc'"
+                  [class.dark:text-orange-500]="sortBy() === 'year_desc' || sortBy() === 'year_asc'"
+                  [class.font-bold]="sortBy() === 'year_desc' || sortBy() === 'year_asc'"
+                  [attr.aria-label]="'Sort by release year, currently ' + (sortBy() === 'year_desc' ? 'newest first' : sortBy() === 'year_asc' ? 'oldest first' : 'unsorted')">
+                  <span>Year</span>
+                  <span class="text-xs" aria-hidden="true">{{ sortArrow('year') }}</span>
+                </button>
+              </div>
+              <div class="min-w-20 text-center">
+                <button type="button"
+                  (click)="toggleSort('rating')"
+                  class="inline-flex cursor-pointer items-center justify-center gap-1.5 transition-colors hover:text-stone-900 dark:hover:text-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 rounded"
+                  [class.text-orange-600]="sortBy() === 'rating_desc' || sortBy() === 'rating_asc'"
+                  [class.dark:text-orange-500]="sortBy() === 'rating_desc' || sortBy() === 'rating_asc'"
+                  [class.font-bold]="sortBy() === 'rating_desc' || sortBy() === 'rating_asc'"
+                  [attr.aria-label]="'Sort by rating, currently ' + (sortBy() === 'rating_desc' ? 'highest first' : sortBy() === 'rating_asc' ? 'lowest first' : 'unsorted')">
+                  <span>Rating</span>
+                  <span class="text-xs" aria-hidden="true">{{ sortArrow('rating') }}</span>
+                </button>
+              </div>
+            </div>
+            <div class="relative transition-opacity duration-150" [class.opacity-50]="loadingMovies()">
+              <ul class="divide-y divide-stone-200 dark:divide-neutral-800">
+                @for (movie of visibleMovies(); track movie.id) {
+                  <li class="relative py-4 sm:py-5" data-movie-row>
+                  @if (deletingMovie()?.id === movie.id) {
+                    <section class="movie-panel-enter flex flex-col gap-4 rounded-lg border border-red-300 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-labelledby="delete-heading">
+                      <div><h2 id="delete-heading" class="text-lg font-semibold text-red-950 dark:text-red-100">Remove “{{ movie.name }}”?</h2><p class="mt-1 text-base text-red-900 dark:text-red-200">This cannot be undone.</p></div>
+                      <div class="flex gap-3"><button class="min-h-11 cursor-pointer rounded-md border border-stone-300 px-4 text-base font-medium dark:border-neutral-700" type="button" (click)="cancelDelete($event)">Cancel</button><button class="min-h-11 cursor-pointer rounded-md bg-red-700 px-4 text-base font-semibold text-white hover:bg-red-800" type="button" (click)="confirmDelete()">Remove movie</button></div>
+                    </section>
+                  } @else if (editorOpen() && editingMovie()?.id === movie.id) {
+                    <section class="movie-panel-enter editor-panel rounded-lg border border-stone-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900 sm:p-6" aria-labelledby="inline-editor-heading">
+                        <div class="flex items-start justify-between gap-4">
+                          <h2 id="inline-editor-heading" class="text-xl font-semibold">Edit movie</h2>
+                        </div>
+                        <form class="mt-5 grid grid-cols-[minmax(0,1fr)_5rem] gap-4" #inlineMovieForm="ngForm" novalidate (ngSubmit)="saveMovie()">
+                          <label class="flex min-w-0 flex-col gap-2 text-base font-medium">Title
+                            <input class="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="title" required maxlength="255" [(ngModel)]="title" placeholder="Movie title">
+                            @if (inlineMovieForm.submitted && !title.trim()) { <span class="text-sm font-normal text-red-700 dark:text-red-300" role="alert">Enter a movie title.</span> }
+                          </label>
+                          <label class="flex min-w-0 flex-col gap-2 text-base font-medium">Year
+                            <input class="hide-number-spinner min-h-12 w-full min-w-0 appearance-none rounded-md border border-stone-300 bg-white px-3 text-base focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950" name="releaseYear" required type="number" min="1" max="9999" [(ngModel)]="releaseYear">
+                            @if (inlineMovieForm.submitted && (!releaseYear || releaseYear < 1 || releaseYear > 9999)) { <span class="text-sm font-normal text-red-700 dark:text-red-300" role="alert">Enter a valid release year.</span> }
+                          </label>
+                          <div class="col-span-2">
+                            <span class="mb-2 block text-base font-medium">Rating</span>
+                            <div class="flex w-full overflow-hidden rounded-md border border-stone-300 dark:border-neutral-700" role="group" aria-label="Rating">
+                              @for (score of [10,9,8,7,6,5,4,3,2,1]; track score) {
+                                <button class="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center justify-center border-r border-stone-300 text-sm font-semibold last:border-r-0 dark:border-neutral-700 sm:text-base"
+                                  type="button" (click)="rating = rating === score ? null : score" [attr.aria-label]="'Rating ' + score" [attr.aria-pressed]="rating === score"
+                                  [style.background-color]="rating === score ? ratingColor(score) : ''"
+                                  [style.color]="rating === score ? ratingTextColor(score) : ''"
+                                  [class.bg-white]="rating !== score" [class.dark:bg-neutral-950]="rating !== score"
+                                  [class.hover:bg-stone-100]="rating !== score" [class.dark:hover:bg-neutral-800]="rating !== score">
+                                  {{ score }}
+                                </button>
+                              }
+                            </div>
+                          </div>
+                          <div class="col-span-2 flex flex-wrap items-center justify-end gap-3">
+                            <button class="min-h-12 cursor-pointer rounded-md border border-stone-300 px-5 text-base font-medium hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="closeEditor($event)">Cancel</button>
+                            <button class="min-h-12 cursor-pointer rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700" type="submit" [disabled]="saving()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
+                          </div>
+                        </form>
+                    </section>
+                  } @else {
+                  <div class="flex items-center gap-2 sm:gap-5">
+                    <button class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left sm:gap-5" type="button" (click)="toggleMovieActions(movie.id)" [attr.aria-expanded]="activeMovieActionsId() === movie.id" [attr.aria-label]="'Actions for ' + movie.name">
+                      <span class="min-w-0 flex-1 break-words text-lg font-semibold leading-snug sm:truncate sm:text-xl">{{ movie.name }}</span>
+                      <span class="shrink-0 text-base text-stone-600 dark:text-neutral-300">{{ movie.releaseYear }}</span>
+                      <span class="inline-flex min-w-20 w-fit shrink-0 items-center justify-center gap-1 rounded-md px-3 py-2 text-base font-semibold" [style.background-color]="ratingColor(movie.rating)" [style.color]="ratingTextColor(movie.rating)">{{ movie.rating === null ? 'Unrated' : movie.rating + ' / 10' }}</span>
+                    </button>
+                    @if (activeMovieActionsId() === movie.id) {
+                      <div class="movie-actions-enter absolute inset-0 z-10 flex items-center justify-center gap-2 bg-stone-50 px-3 dark:bg-neutral-950">
+                        <button class="absolute inset-0 cursor-pointer" type="button" aria-label="Close movie actions" (click)="toggleMovieActions(movie.id)"></button>
+                        <div class="relative z-10 flex gap-2">
+                          <button class="min-h-11 cursor-pointer rounded-md border border-stone-300 bg-white px-4 text-base font-medium text-stone-700 hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800" type="button" (click)="openEditForm(movie, $event)" [attr.aria-label]="'Edit ' + movie.name">Edit</button>
+                          <button class="min-h-11 cursor-pointer rounded-md bg-red-700 px-4 text-base font-medium text-white hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-red-700" type="button" (click)="requestDelete(movie, $event)" [attr.aria-label]="'Remove ' + movie.name">Remove</button>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                  }
+                  </li>
+                }
+              </ul>
+            </div>
           } @else {
-            <div class="py-16 text-center"><h2 class="text-xl font-semibold">{{ totalItems() ? 'No movies found' : 'No movies yet' }}</h2><p class="mt-2 text-base text-stone-600 dark:text-neutral-300">{{ totalItems() ? 'Change your search or rating filter.' : 'Add a movie to get started.' }}</p></div>
+            <div class="py-16 text-center">
+              @if (query().trim().length >= 3 || selectedRatings().length || includeUnrated()) {
+                <h2 class="text-xl font-semibold">No matching movies.</h2>
+              } @else {
+                <h2 class="text-xl font-semibold">{{ totalItems() ? 'No movies found' : 'No movies yet' }}</h2>
+                <p class="mt-2 text-base text-stone-600 dark:text-neutral-300">{{ totalItems() ? 'Change your search or rating filter.' : 'Add a movie to get started.' }}</p>
+              }
+            </div>
           }
           @if (loadingMore()) { <p class="py-4 text-center text-base text-stone-600 dark:text-neutral-300" role="status">Loading more…</p> }
-          @if (hasNext()) { <div class="flex justify-center border-t border-stone-200 py-5 dark:border-neutral-800"><button class="min-h-12 rounded-md border border-stone-300 px-5 text-base font-medium hover:bg-stone-100 disabled:opacity-50 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="loadMore()" [disabled]="loadingMore()">Load more</button></div> }
+          @if (hasNext()) { <div class="flex justify-center border-t border-stone-200 py-5 dark:border-neutral-800"><button class="min-h-12 cursor-pointer rounded-md border border-stone-300 px-5 text-base font-medium hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="loadMore()" [disabled]="loadingMore()">Load more</button></div> }
         </section>
       </section>
     }
