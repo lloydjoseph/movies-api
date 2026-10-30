@@ -24,3 +24,5 @@ npm run build
 The production build uses `/movies/` as its base path for `https://jlloyd.fr/movies/`. Configure `APP_FRONTEND_URL=https://jlloyd.fr/movies/` on the backend. Nginx Proxy Manager routes `/movies` (with or without the trailing slash), `/api/`, `/oauth2/`, and `/login/` to the frontend gateway; that gateway serves the app and proxies API/OAuth requests privately to Spring Boot on the same origin. The production gateway supplies security response headers and fixed forwarded host/protocol values. Production deployment still requires the `movies-proxy` network, NPM routes, protected environment file, production OAuth callback, and verified database backup/restore on the server.
 
 Theme overrides are stored in this browser's local storage. The current backend does not synchronize theme preferences across devices.
+
+Fira Sans is served from local WOFF2 assets in `src/fonts/`; the OFL license is included with those assets. The browser does not request the font from Google Fonts.

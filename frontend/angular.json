@@ -35,11 +35,6 @@
           "configurations": {
             "production": {
               "baseHref": "/movies/",
-              "optimization": {
-                "fonts": {
-                  "inline": false
-                }
-              },
               "budgets": [
                 {
                   "type": "initial",
