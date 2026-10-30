@@ -1,0 +1,88 @@
+# Deployment
+
+**Status:** Target hosting model and public app path are agreed. A production Compose stack, container build files, private app networks, and an Nginx frontend gateway are now in the repository. The dedicated proxy network, Nginx Proxy Manager routes, production secrets, data migration, and live verification still need to be completed on the server.
+
+## Agreed target
+
+- The owner operates the application on their own server, located on their network.
+- Docker Compose is the intended method for deploying the movie application on that server.
+- The movie application's deployment Compose definition should be version-controlled in this repository; server-specific values and secrets stay outside Git.
+- The repository has not yet been cloned to the server. Its planned checkout path is `/home/joseph/movies-api`.
+- The source repository is hosted on GitHub and is private; the server needs a credential to clone and pull it. The chosen method is a repository-scoped read-only deploy key kept on the server, outside the repository. It has not yet been configured.
+- The movie application will have its own PostgreSQL container, managed with its app deployment rather than reusing another service's database.
+- The existing movie database must be migrated into the new PostgreSQL database before cutover. The source engine, schema, location, and data volume are not yet recorded.
+- The movie application's public entry point will be isolated from the existing media-services Docker network.
+- Deployments will be performed manually because updates are expected only every few months. Automated build/deploy workflows are not currently planned.
+- The application is reachable over the internet using the owner's domain name.
+- The public site path is `https://jlloyd.fr/movies/`. Nginx Proxy Manager routes `/movies` (including the slashless path), `/api/`, `/oauth2/`, and `/login/` to the frontend gateway on the dedicated proxy network. That gateway serves Angular and proxies API/OAuth traffic to Spring Boot on the private app network, preserving same-origin session cookies and CSRF.
+- Set backend `APP_FRONTEND_URL=https://jlloyd.fr/movies/` and register `https://jlloyd.fr/login/oauth2/code/google` as the Google OAuth callback.
+- The application must work in a browser on phones, tablets, and desktop computers.
+- Intended application stack: Angular frontend, Spring Boot backend, and PostgreSQL database.
+- Since the application and personal movie data are internet-accessible, production access must be served over HTTPS. Nginx Proxy Manager is the planned TLS terminator; the app's public certificate and renewal still need live verification.
+
+## Owner's server
+
+Reported configuration (from `inxi -Fxz`):
+
+- **System:** Dell OptiPlex 3060 desktop.
+- **Operating system:** Debian GNU/Linux 13 (trixie), x86_64; Linux kernel 6.12.85+deb13-amd64.
+- **CPU:** Intel Core i5-8500T, 6 cores.
+- **Memory:** 32 GiB RAM.
+- **Storage:** 256 GB NVMe SSD and 1 TB HDD; `inxi` reports approximately 1.14 TiB total and 619.5 GiB used at capture time.
+- **Network:** wired Realtek Gigabit Ethernet interface is connected at 1 Gbit/s; Wi-Fi is also present.
+- **Router and ingress:** Bouygues Telecom router with enabled port forwarding. The owner provided a current list of rules, including external TCP `80` → server `80`, `443` → `443`, `8080` → `8888`, and `8443` → `4443`; other rules include ports `8096` and `5055`. These are observations only: their current purpose, necessity, and service ownership have not been audited. Do not treat this list as the required configuration for this application.
+- **Reverse proxy:** Nginx Proxy Manager is already running in Docker as container `npm` (`jc21/nginx-proxy-manager:latest`), managed by Compose project `media-stack` using `/mnt/hdd/media-stack/docker-compose.yml`. Docker publishes host ports `8888` to container HTTP port `80`, `4443` to container HTTPS port `443`, and `81` to its management port `81` on all host interfaces. The router's external `8080`/`8443` rules reach NPM's published web ports; its standard external `80`/`443` rules instead reach host ports `80`/`443`.
+- **Docker networks:** `docker inspect` shows NPM and Jellyseerr attached to `media-stack_default`. The host also has networks named `mediastack_default` and `movies-api_default`; membership of the remaining services and intended application network are not yet confirmed. No movie application container has been confirmed on NPM's network.
+- **Other Docker services:** the host also runs FlareSolverr, Prowlarr, Sonarr, Radarr, qBittorrent, Jellyseerr, and MySQL. The movie application will share a host with existing workloads.
+- **HTTPS:** reported as configured, but not yet verified for the movie app's domain or the proxy's certificate renewal. The router rules alone do not establish whether the app's domain reaches NPM on the standard HTTPS port.
+
+These are observed hardware details, not a measured minimum requirement or capacity guarantee. Machine serial numbers and network addresses are intentionally omitted.
+
+## Current local topology
+
+- Angular development server runs separately from the backend.
+- Spring Boot API connects to PostgreSQL.
+- PostgreSQL can be started with the Compose file in `backend/`; it binds only to host loopback for local development. Production Compose publishes no database or backend ports.
+
+## Server and network details to capture
+
+- Confirm container/runtime setup and the production Compose deployment on the host.
+- Domain DNS and whether the server has a static or dynamic public IP.
+- Audit the existing router rules and identify which service listens on host ports `80` and `443`; rule labels mention Jellyfin/Caddy, while the Docker listing shows NPM publishing web ports on `8888` and `4443`.
+- Audit existing forwarding rules before connecting `jlloyd.fr`; do not change other hosted services' rules without checking their use.
+- Create a dedicated Docker proxy network shared by Nginx Proxy Manager and the movie app's public web entry point. Leave `media-stack_default` and the existing media services unchanged.
+- Keep backend and PostgreSQL traffic on private application networks; do not expose PostgreSQL publicly.
+- Use the repository's `docker-compose.production.yml` for the frontend gateway, backend, and dedicated database. Create its required external `movies-proxy` Docker network and attach NPM during the planned maintenance step.
+- Keep production secrets and server-specific configuration in protected server-side environment/secrets files; commit only safe placeholders/documentation, never credential values.
+- Update NPM's Compose configuration to join the dedicated proxy network and recreate/redeploy NPM in a planned maintenance step; this may briefly interrupt its existing proxy service.
+- Verify HTTPS for the chosen application domain and certificate renewal in Nginx Proxy Manager.
+- Whether frontend, API, and database run on the same host; database must remain private to the application/network.
+- Expected catalog size, number of accounts, and expected usage.
+
+## Operations and recovery — Open
+
+- Database backup schedule, retention, off-server copy, and restore procedure.
+- Application update and rollback process.
+- Monitoring, logs, health checks, and alerting appropriate for a personally operated service.
+- Secret storage and rotation, including Google OAuth client credentials and the account allowlist.
+- Availability expectations and recovery objectives.
+- Source database inventory, field mapping, migration rehearsal, and cutover/rollback plan.
+
+## Deployment procedure
+
+See the [manual deployment guide](deployment-guide.md) for the release checklist. Server-side environment-file and backup paths remain placeholders until they are established on the host.
+
+The existing database must be migrated before cutover; see the [data migration plan](data-migration.md).
+
+## Production readiness gaps in the current repository
+
+- Copy [production.env.example](../../production.env.example) to a protected server-side environment file outside the checkout. Supply database and OAuth credentials there; never use the local Compose stack as production.
+- The production environment file has separate database bootstrap-admin and application-role credentials. Keep both private; the backend receives only `DB_USERNAME` and `DB_PASSWORD`. PostgreSQL creates the app role from the initialization script only for a new empty volume. If a database volume already exists, provision/grant the app role through an administrator before starting the backend.
+- Apply and verify Liquibase against the production database before cutover. Hibernate validates the resulting schema at startup.
+- Configure Nginx Proxy Manager locations for `/movies` (including the slashless path), `/api/`, `/oauth2/`, and `/login/` to the production frontend gateway on the `movies-proxy` network, preserving the `jlloyd.fr` host. The gateway sends fixed trusted forwarded host/protocol values to the backend. Only the frontend gateway joins the proxy network; PostgreSQL and backend ports are not published.
+- Set `APP_FRONTEND_URL=https://jlloyd.fr/movies/`, register the production Google OAuth callback, and keep `SESSION_COOKIE_SECURE=true`.
+- Verify the frontend gateway's HSTS, CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and Permissions Policy headers through the public HTTPS proxy. Avoid adding conflicting duplicate security headers in NPM.
+- Define the deployed commit, update/rollback procedure, and image update schedule.
+- Add backups and verify restoration before relying on the catalog as the sole record of watch history.
+
+The exact implementation choices should follow inspection of the existing server and network setup rather than assumptions about a generic cloud platform.

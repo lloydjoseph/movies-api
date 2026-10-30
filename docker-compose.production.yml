@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in the protected production environment file}
+      POSTGRES_USER: ${DB_ADMIN_USER:?Set DB_ADMIN_USER in the protected production environment file}
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:?Set DB_ADMIN_PASSWORD in the protected production environment file}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME in the protected production environment file}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the protected production environment file}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$DB_USERNAME\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      SPRING_PROFILES_ACTIVE: production
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      GOOGLE_OAUTH_ENABLED: "true"
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:?Set GOOGLE_OAUTH_CLIENT_ID}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:?Set GOOGLE_OAUTH_CLIENT_SECRET}
+      APP_ALLOWED_GOOGLE_EMAILS: ${APP_ALLOWED_GOOGLE_EMAILS:?Set APP_ALLOWED_GOOGLE_EMAILS}
+      APP_FRONTEND_URL: ${APP_FRONTEND_URL:?Set APP_FRONTEND_URL}
+      SESSION_COOKIE_SECURE: "true"
+      SPRING_JPA_SHOW_SQL: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app
+      - backend_egress
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    networks:
+      - app
+      - proxy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  app:
+    internal: true
+  backend_egress:
+  proxy:
+    external: true
+    name: movies-proxy
+
+volumes:
+  postgres_data:
