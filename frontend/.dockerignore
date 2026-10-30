@@ -1,0 +1,7 @@
+.angular
+.env
+.git
+node_modules
+dist
+coverage
+*.log
