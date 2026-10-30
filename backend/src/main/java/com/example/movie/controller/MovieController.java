@@ -25,6 +25,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/movies")
 @RequiredArgsConstructor
@@ -36,22 +38,26 @@ public class MovieController {
     @GetMapping
     public MoviePageDto catalog(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String q,
-            @RequestParam(defaultValue = "all") String ratingMode,
+            @RequestParam(required = false) String ratingMode,
             @RequestParam(required = false) Integer rating,
             @RequestParam(required = false) Integer minRating,
             @RequestParam(required = false) Integer maxRating,
+            @RequestParam(required = false) List<Integer> ratings,
+            @RequestParam(required = false) Boolean includeUnrated,
+            @RequestParam(defaultValue = "rating_desc") String sort,
             @AuthenticationPrincipal OidcUser user) {
         if (page < 0 || size < 1 || size > 100) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid page or size");
         }
 
         String title = normalizeQuery(q);
-        validateRatingFilter(ratingMode, rating, minRating, maxRating);
+        validateFilters(ratingMode, rating, minRating, maxRating, ratings);
+        validateSort(sort);
         Account account = accountService.getOrCreate(user);
         return service.findCatalogPage(account, title, ratingMode, rating, minRating, maxRating,
-                PageRequest.of(page, size));
+                ratings, includeUnrated, sort, PageRequest.of(page, size));
     }
 
     private String normalizeQuery(String query) {
@@ -63,15 +69,35 @@ public class MovieController {
         return normalized.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
-    private void validateRatingFilter(String mode, Integer rating, Integer minRating, Integer maxRating) {
-        boolean valid = switch (mode) {
-            case "all", "unrated" -> rating == null && minRating == null && maxRating == null;
-            case "exact" -> rating != null && rating >= 1 && rating <= 10 && minRating == null && maxRating == null;
-            case "range" -> rating == null && minRating != null && maxRating != null
-                    && minRating >= 1 && maxRating <= 10 && minRating <= maxRating;
+    private void validateFilters(String mode, Integer rating, Integer minRating, Integer maxRating, List<Integer> ratings) {
+        if (ratings != null) {
+            for (Integer r : ratings) {
+                if (r == null || r < 1 || r > 10) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Each rating must be between 1 and 10");
+                }
+            }
+        }
+        if (mode != null && !mode.isBlank()) {
+            boolean valid = switch (mode) {
+                case "all", "unrated" -> rating == null && minRating == null && maxRating == null;
+                case "exact" -> rating != null && rating >= 1 && rating <= 10 && minRating == null && maxRating == null;
+                case "range" -> rating == null && minRating != null && maxRating != null
+                        && minRating >= 1 && maxRating <= 10 && minRating <= maxRating;
+                default -> false;
+            };
+            if (!valid) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid rating filter");
+        }
+    }
+
+    private void validateSort(String sort) {
+        if (sort == null) return;
+        boolean valid = switch (sort) {
+            case "rating_desc", "rating_asc", "year_desc", "year_asc", "title_asc", "title_desc" -> true;
             default -> false;
         };
-        if (!valid) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid rating filter");
+        if (!valid) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid sort parameter");
+        }
     }
 
     @PostMapping

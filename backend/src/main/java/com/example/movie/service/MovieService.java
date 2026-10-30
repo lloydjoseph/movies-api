@@ -5,6 +5,9 @@ import com.example.movie.dto.MoviePageDto;
 import com.example.movie.dto.MovieRequest;
 import com.example.movie.entity.Account;
 import org.springframework.data.domain.Pageable;
+
+import java.util.List;
+
 public interface MovieService {
 
     MoviePageDto findCatalogPage(
@@ -14,6 +17,9 @@ public interface MovieService {
             Integer exactRating,
             Integer minRating,
             Integer maxRating,
+            List<Integer> ratings,
+            Boolean includeUnrated,
+            String sort,
             Pageable pageable);
 
     MovieDto create(MovieRequest request, Account account);

@@ -198,15 +198,31 @@ class MovieApiIntegrationTests {
         createMovie("owner-sub", "owner@example.com", "Newest unrated", 2023, null);
         createMovie("other-sub", "second@example.com", "Other account", 2024, 9);
 
+        // Default sort is rating descending with unrated last (8, 5, null)
         mockMvc.perform(get("/api/movies")
                         .param("page", "0")
                         .param("size", "2")
                         .with(oidcUser("owner-sub", "owner@example.com")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(2))
-                .andExpect(jsonPath("$.items[0].name").value("Newest unrated"))
+                .andExpect(jsonPath("$.items[0].name").value("Latest rated"))
+                .andExpect(jsonPath("$.items[1].name").value("Older rated"))
                 .andExpect(jsonPath("$.totalItems").value(3))
                 .andExpect(jsonPath("$.hasNext").value(true));
+
+        // Year descending sort
+        mockMvc.perform(get("/api/movies")
+                        .param("sort", "year_desc")
+                        .with(oidcUser("owner-sub", "owner@example.com")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].name").value("Newest unrated"));
+
+        // Title ascending sort
+        mockMvc.perform(get("/api/movies")
+                        .param("sort", "title_asc")
+                        .with(oidcUser("owner-sub", "owner@example.com")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].name").value("Latest rated"));
 
         mockMvc.perform(get("/api/movies")
                         .param("q", "latest")
@@ -218,6 +234,24 @@ class MovieApiIntegrationTests {
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.items[0].name").value("Latest rated"))
                 .andExpect(jsonPath("$.totalItems").value(1));
+
+        // Multi-select ratings filter (8 and 5)
+        mockMvc.perform(get("/api/movies")
+                        .param("ratings", "8,5")
+                        .with(oidcUser("owner-sub", "owner@example.com")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.totalItems").value(2));
+
+        // Multi-select ratings with includeUnrated
+        mockMvc.perform(get("/api/movies")
+                        .param("ratings", "8")
+                        .param("includeUnrated", "true")
+                        .with(oidcUser("owner-sub", "owner@example.com")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].name").value("Latest rated"))
+                .andExpect(jsonPath("$.items[1].name").value("Newest unrated"));
     }
 
     @Test
@@ -231,6 +265,16 @@ class MovieApiIntegrationTests {
                         .param("ratingMode", "range")
                         .param("minRating", "8")
                         .param("maxRating", "4")
+                        .with(oidcUser("owner-sub", "owner@example.com")))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/movies")
+                        .param("ratings", "0,8")
+                        .with(oidcUser("owner-sub", "owner@example.com")))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/movies")
+                        .param("sort", "unknown")
                         .with(oidcUser("owner-sub", "owner@example.com")))
                 .andExpect(status().isBadRequest());
     }
