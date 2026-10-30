@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Create missing tables for a fresh database. Existing local tables are retained. -->
+    <changeSet id="001-create-movie-account" author="movies-api">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="movie_account"/>
+            </not>
+        </preConditions>
+        <createTable tableName="movie_account">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="google_subject" type="VARCHAR(255)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_movie_account_google_subject"/>
+            </column>
+            <column name="email" type="VARCHAR(320)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="VARCHAR(255)"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="002-create-movie" author="movies-api">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="movie"/>
+            </not>
+        </preConditions>
+        <createTable tableName="movie">
+            <column name="id" type="INTEGER" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)"/>
+            <column name="release_year" type="INTEGER"/>
+            <column name="rating" type="INTEGER"/>
+            <column name="account_id" type="BIGINT"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="003-add-movie-account-foreign-key" author="movies-api">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM pg_constraint
+                WHERE conrelid='movie'::regclass
+                  AND confrelid='movie_account'::regclass
+                  AND contype='f'
+            </sqlCheck>
+        </preConditions>
+        <addForeignKeyConstraint
+                baseTableName="movie"
+                baseColumnNames="account_id"
+                referencedTableName="movie_account"
+                referencedColumnNames="id"
+                constraintName="fk_movie_account_account"/>
+    </changeSet>
+
+    <changeSet id="004-enforce-required-movie-fields" author="movies-api">
+        <preConditions onFail="HALT">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM movie WHERE name IS NULL</sqlCheck>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM movie WHERE release_year IS NULL</sqlCheck>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM movie WHERE account_id IS NULL</sqlCheck>
+        </preConditions>
+        <addNotNullConstraint tableName="movie" columnName="name" columnDataType="VARCHAR(255)"/>
+        <addNotNullConstraint tableName="movie" columnName="release_year" columnDataType="INTEGER"/>
+        <addNotNullConstraint tableName="movie" columnName="account_id" columnDataType="BIGINT"/>
+    </changeSet>
+
+    <changeSet id="005-enforce-rating-range" author="movies-api">
+        <preConditions onFail="HALT">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM movie
+                WHERE rating IS NOT NULL AND (rating &lt; 1 OR rating &gt; 10)
+            </sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE movie ADD CONSTRAINT ck_movie_rating_range CHECK (rating IS NULL OR rating BETWEEN 1 AND 10)</sql>
+        <rollback>
+            <sql>ALTER TABLE movie DROP CONSTRAINT ck_movie_rating_range</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="006-generate-movie-ids" author="movies-api">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'movie'
+                  AND column_name = 'id'
+                  AND is_identity = 'NO'
+                  AND column_default IS NULL
+            </sqlCheck>
+        </preConditions>
+        <addAutoIncrement tableName="movie" columnName="id" columnDataType="INTEGER"/>
+        <sql>
+            SELECT setval(pg_get_serial_sequence('movie', 'id'),
+                          COALESCE((SELECT MAX(id) FROM movie), 0) + 1,
+                          false)
+        </sql>
+    </changeSet>
+
+    <changeSet id="007-enforce-positive-release-year" author="movies-api">
+        <preConditions onFail="HALT">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM movie WHERE release_year &lt; 1
+            </sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE movie ADD CONSTRAINT ck_movie_release_year_positive CHECK (release_year &gt; 0)</sql>
+        <rollback>
+            <sql>ALTER TABLE movie DROP CONSTRAINT ck_movie_release_year_positive</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

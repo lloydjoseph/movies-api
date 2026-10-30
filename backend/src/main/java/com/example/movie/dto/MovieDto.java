@@ -6,5 +6,6 @@ import lombok.Builder;
 public record MovieDto(
         Integer id,
         String name,
+        Integer releaseYear,
         Integer rating
 ) {}
