@@ -10,7 +10,7 @@
 - The repository has not yet been cloned to the server. Its planned checkout path is `/home/joseph/movies-api`.
 - The source repository is hosted on GitHub and is private; the server needs a credential to clone and pull it. The chosen method is a repository-scoped read-only deploy key kept on the server, outside the repository. It has not yet been configured.
 - The movie application will have its own PostgreSQL container, managed with its app deployment rather than reusing another service's database.
-- The existing movie database must be migrated into the new PostgreSQL database before cutover. The source engine, schema, location, and data volume are not yet recorded.
+- The existing movie database must be migrated into the new PostgreSQL database before cutover. An inspected dump identifies MariaDB 11.8.6, but it is not yet confirmed whether the server's MySQL 8 container is the live source. See the [data migration plan](data-migration.md).
 - The movie application's public entry point will be isolated from the existing media-services Docker network.
 - Deployments will be performed manually because updates are expected only every few months. Automated build/deploy workflows are not currently planned.
 - The application is reachable over the internet using the owner's domain name.
@@ -30,10 +30,25 @@ Reported configuration (from `inxi -Fxz`):
 - **Memory:** 32 GiB RAM.
 - **Storage:** 256 GB NVMe SSD and 1 TB HDD; `inxi` reports approximately 1.14 TiB total and 619.5 GiB used at capture time.
 - **Network:** wired Realtek Gigabit Ethernet interface is connected at 1 Gbit/s; Wi-Fi is also present.
-- **Router and ingress:** Bouygues Telecom router with enabled port forwarding. The owner provided a current list of rules, including external TCP `80` → server `80`, `443` → `443`, `8080` → `8888`, and `8443` → `4443`; other rules include ports `8096` and `5055`. These are observations only: their current purpose, necessity, and service ownership have not been audited. Do not treat this list as the required configuration for this application.
-- **Reverse proxies:** Debian host Nginx is a systemd service listening on host ports 80/443. It currently has separate virtual hosts for `ask.jlloyd.fr` (port 5055) and `watch.jlloyd.fr` (Jellyfin on port 8096). Nginx Proxy Manager is separately running in Docker as `npm`, managed by Compose project `media-stack` using `/mnt/hdd/media-stack/docker-compose.yml`; it is attached to `media-stack_default` and publishes host ports `8888`→80, `4443`→443, and `81`→81. Keep both existing proxy configurations and media services unchanged for this deployment.
-- **Docker networks:** `docker inspect` shows NPM and Jellyseerr attached to `media-stack_default`. The host also has networks named `mediastack_default` and `movies-api_default`; membership of the remaining services and intended application network are not yet confirmed. No movie application container has been confirmed on NPM's network.
-- **Other Docker services:** the host also runs FlareSolverr, Prowlarr, Sonarr, Radarr, qBittorrent, Jellyseerr, and MySQL. The movie application will share a host with existing workloads.
+- **Router and ingress:** Bouygues Telecom router with enabled port forwarding. Reported rules include external TCP `80` → server `80`, `443` → `443`, `8080` → `8888`, and `8443` → `4443`; other rules include ports `8096` and `5055`. Their purpose, necessity, and service ownership have not been fully audited. Do not change them for this application.
+- **Reverse proxies:** Debian host Nginx is a systemd service listening on host ports 80/443. Its `ask.jlloyd.fr` virtual host proxies to `127.0.0.1:5055`; `watch.jlloyd.fr` proxies to Jellyfin at `192.168.1.71:8096`. Nginx Proxy Manager is separately running in Docker as `npm`, managed by Compose project `media-stack` using `/mnt/hdd/media-stack/docker-compose.yml`; it is attached to `media-stack_default` and publishes host ports `8888`→80, `4443`→443, and `81`→81. Keep both existing proxy configurations and media services unchanged for this deployment.
+- **Docker containers observed with `docker ps` on 2026-10-30:** all listed containers reported `Up 2 months`. Published ports below are host-side mappings as shown by Docker at that time.
+
+  | Container | Image | Published ports |
+  |---|---|---|
+  | `npm` | `jc21/nginx-proxy-manager:latest` | `0.0.0.0` and `[::]`: host `81→81`, `8888→80`, `4443→443` |
+  | `flaresolverr` | `ghcr.io/flaresolverr/flaresolverr:latest` | `0.0.0.0:8191→8191`; container port `8192/tcp` is not published |
+  | `prowlarr` | `lscr.io/linuxserver/prowlarr:latest` | `0.0.0.0:9696→9696` |
+  | `sonarr` | `lscr.io/linuxserver/sonarr:latest` | `0.0.0.0:8989→8989` |
+  | `radarr` | `lscr.io/linuxserver/radarr:latest` | `0.0.0.0:7878→7878` |
+  | `qbittorrent` | `lscr.io/linuxserver/qbittorrent:latest` | `0.0.0.0` and `[::]`: host `6881→6881` TCP/UDP, `8080→8080` TCP |
+  | `jellyseerr` | `fallenbagel/jellyseerr:latest` | `0.0.0.0:5055→5055` |
+  | `mysql` | `mysql:8` | `127.0.0.1:3306→3306`; container port `33060/tcp` is not published |
+
+- **Compose projects:** `npm` has Compose labels identifying project `media-stack`, service `npm`, and config `/mnt/hdd/media-stack/docker-compose.yml`. Running `docker compose -f /mnt/hdd/media-stack/docker-compose.yml config --services` reported `flaresolverr`, `jellyseerr`, `prowlarr`, `qbittorrent`, `radarr`, and `sonarr`.
+- **Docker networks:** `docker network ls` reported `bridge`, `host`, `media-stack_default`, `mediastack_default`, `movies-api_default`, and `none`. `docker inspect npm` confirmed that NPM is attached to `media-stack_default`. The similarly named `mediastack_default` is a distinct network; membership of the other containers was not established. Keep the movie deployment separate from these media networks.
+- **Host listeners:** the user's `ss -ltnp` output showed listeners on `80`, `443`, `81`, `8888`, `4443`, `8080`, and `8096`. Docker publishes NPM on `81`/`8888`/`4443` and qBittorrent on `8080`; `8096` is the reported Jellyfin port. A process listing showed a host Nginx master and additional Nginx processes; do not conflate the host service with NPM's containerized Nginx. The `docker ps` snapshot did not include a container named Jellyfin.
+- **Administrator access:** the `joseph` shell account reported `joseph is not in the sudoers file` when trying `sudo`. The owner also confirmed having root/admin access. Use an authorized root/admin session for system Nginx, Certbot, and `/etc` changes; do not assume `sudo` works for `joseph`.
 - **HTTPS:** the host currently serves a Let's Encrypt certificate for `ask.jlloyd.fr` on the default virtual host; the certificate SAN does not include `jlloyd.fr`. Certbot's renewal timer is active, but the apex certificate and public HTTPS route are not yet configured or verified.
 
 These are observed hardware details, not a measured minimum requirement or capacity guarantee. Machine serial numbers and network addresses are intentionally omitted.
@@ -44,20 +59,17 @@ These are observed hardware details, not a measured minimum requirement or capac
 - Spring Boot API connects to PostgreSQL.
 - PostgreSQL can be started with the Compose file in `backend/`; it binds only to host loopback for local development. Production Compose publishes no database or backend ports.
 
-## Server and network details to capture
+## Deployment state and remaining checks
 
-- Production Compose deployment on the host remains to be done.
-- DNS A records for `jlloyd.fr` and `movies.jlloyd.fr` resolve to the server's current router WAN address.
-- Router forwards external 80/443 to the Debian host's 80/443; external 8080/8443 reach NPM's published ports 8888/4443. Do not alter these rules for this deployment.
-- Host Nginx is the public service on 80/443 and already hosts separate `ask` and `watch` virtual hosts. Add only a new `jlloyd.fr` virtual host after obtaining its certificate.
-- Bind the movie frontend gateway to `127.0.0.1:8188`; proxy to it from host Nginx. Do not attach the movie stack to `media-stack_default` or modify NPM.
+- The production Compose deployment, repository checkout, apex certificate, host-Nginx movie site, and production environment file have not been confirmed as installed on the server. The repository checkout path is planned as `/home/joseph/movies-api`.
+- DNS A records for `jlloyd.fr` and `movies.jlloyd.fr` resolve to the router's public address. This was reported as observed; public HTTPS for the apex is not yet verified.
+- Preserve router forwarding and existing `ask`/`watch` virtual hosts. Add only the new `jlloyd.fr` host-Nginx virtual host after obtaining and verifying its certificate.
+- The committed production Compose file binds the movie frontend gateway to `127.0.0.1:8188`; proxy to it from host Nginx. Do not attach the movie stack to `media-stack_default`, create an NPM route, or modify NPM.
 - Keep backend and PostgreSQL traffic on private application networks; do not expose PostgreSQL publicly.
-- Use the repository's `docker-compose.production.yml` for the frontend gateway, backend, and dedicated database. It binds the gateway to host loopback `127.0.0.1:8188`; do not create a proxy network or attach NPM.
-- Keep production secrets and server-specific configuration in protected server-side environment/secrets files; commit only safe placeholders/documentation, never credential values.
+- Keep production secrets and server-specific configuration in protected server-side files, never in Git or chat.
 - Obtain and verify a Let's Encrypt certificate for `jlloyd.fr` using the existing Certbot Nginx plugin, then enable the repository's host-Nginx site config.
 - Verify public HTTPS and Certbot renewal for the apex domain.
-- Whether frontend, API, and database run on the same host; database must remain private to the application/network.
-- Expected catalog size, number of accounts, and expected usage.
+- Confirm production catalog size, account count, and expected usage during migration planning.
 
 ## Operations and recovery — Open
 

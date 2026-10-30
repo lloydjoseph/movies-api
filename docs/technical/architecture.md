@@ -79,7 +79,7 @@ The owner's Debian host Nginx listens on public ports 80/443 and already serves 
 - Database URL, username, and password are environment supplied. Local values are read from the ignored `backend/.env` under the explicit `local` profile; production uses the explicit `production` profile and protected server-side secrets.
 - In production, PostgreSQL initializes a separate non-superuser `DB_USERNAME` role for the backend. `DB_ADMIN_USER` and `DB_ADMIN_PASSWORD` are bootstrap credentials used only by the database container; do not provide them to the backend. The initialization script runs only for an empty database volume.
 - Liquibase is configured for schema migration. No seed data, backup policy, or retention policy is currently configured. The account table and movie ownership relation are present in the current JPA model.
-- An existing database must be migrated into the target PostgreSQL-backed application before cutover. Its source engine, schema, location, and data volume are not yet recorded; see the [data migration plan](data-migration.md).
+- An existing database must be migrated into the target PostgreSQL-backed application before cutover. An inspected dump identifies MariaDB 11.8.6, but the live source's location and its relationship to the server's MySQL 8 container remain unconfirmed; see the [data migration plan](data-migration.md).
 
 ## Target behavior by component
 

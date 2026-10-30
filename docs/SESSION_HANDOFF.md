@@ -5,7 +5,7 @@ Updated: 2026-10-30
 ## Latest handoff (2026-10-30)
 
 - The user is handing work over to Gemini. Read `PROJECT_CONTEXT.md` and this file first. They work from Ubuntu/WSL and use the command line.
-- Recent local commits on `main`: `5c893a6` backend API/security/DB; `1a384d5` frontend; `f5a33f1` production/deployment docs; `dc40112` root README; `1fc7940` local Fira Sans. No `git push` was run. Confirm remotes/status before pushing.
+- Recent local commits on `main`: `7ca7920` host-Nginx deployment routing; `d135553` catalog documentation; `dcae126` catalog controls and inline editing; `fe8eceb` sorting and rating filters. At the last local check, no push or server deployment had been confirmed; check status before proceeding.
 - The root [README](../README.md) explains the app, local setup, launch, and docs.
 - Fira Sans is now bundled as local WOFF2 assets in `frontend/src/fonts/`, with its OFL license. Google Fonts links and external font CSP allowances were removed. `npm run build` succeeded after this change.
 - Default catalog sorting and sort controls implemented:
@@ -40,6 +40,8 @@ Updated: 2026-10-30
 - Backend database properties now require `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`. Local development uses an ignored `backend/.env` and the `local` profile. Production OAuth callback URLs use forwarded headers only in the `production` profile; keep backend traffic restricted to the trusted proxy network.
 - Product direction: “Joseph’s Movies”, orange accent, Fira Sans, larger relative text, and Tailwind styling. Production URL: `https://jlloyd.fr/movies/`. The app build uses that base path; movie APIs are under `/api/movies` to avoid a URL collision. Configure production `APP_FRONTEND_URL=https://jlloyd.fr/movies/`.
 - The repository includes production Dockerfiles, a private-network Compose stack, and an Nginx gateway with security headers. The agreed ingress is Debian host Nginx proxying to the gateway on `127.0.0.1:8188`; do not change the router rules, NPM, or media network. The server still needs the apex certificate, protected production environment file, OAuth callback, data migration, and a tested backup/restore procedure.
+- Server observations and deployment facts from 2026-10-30 are recorded in [deployment](technical/deployment.md): host Nginx owns ports 80/443; NPM is the `npm` container in Compose project `media-stack`, attached to `media-stack_default`, with host ports 81/8888/4443; the media containers and their observed ports are listed there. The `joseph` account cannot use `sudo`, so use the owner's separate root/admin access for host changes.
+- The inspected source dump identifies MariaDB 11.8.6. The server has a `mysql:8` container with loopback-only port 3306, but it is not confirmed as the live source of the movie catalog.
 - One CSV title differed from the database only by a leading space. The backfill did not update titles, preserving the database's original title.
 
 ## Next steps
@@ -47,8 +49,9 @@ Updated: 2026-10-30
 1. Do not drop the Docker volume, truncate the table, or re-run an insert-only import.
 2. Restart the backend with `SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run` and verify the signed-in movie list loads without the `lower(bytea)` SQL error. Then manually verify search, filters, and CRUD.
 3. Commit the pending query fix only after reviewing the diff. Keep `backend/.m2/` out of Git.
-4. Configure the reverse proxy and production OAuth callback for `jlloyd.fr/movies/`; set `APP_FRONTEND_URL=https://jlloyd.fr/movies/`.
-5. Remaining product work is cross-device theme preference and movie recommendations. Production work also includes host-Nginx certificate/site setup, production secrets, source data migration, and a verified backup/restore process.
+4. Push the reviewed commits if desired, then configure the host-Nginx certificate/site and protected production environment using [the deployment guide](technical/deployment-guide.md). Do not alter router forwarding, NPM, Jellyfin, or media networks.
+5. Before production cutover, identify the live source database, rehearse and validate migration, and verify database backup/restore. Do not treat an empty production database as authoritative.
+6. Remaining product work includes cross-device theme preference and movie recommendations.
 
 ## Repository notes
 

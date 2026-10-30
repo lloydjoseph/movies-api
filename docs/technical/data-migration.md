@@ -16,6 +16,7 @@ Move the previous application's existing movie catalog and ratings into the new 
 ## Source details to establish
 
 - Database engine/version in the dump: MariaDB 11.8.6. This does not establish whether the home server's MySQL 8 container hosts the live source; confirm before planning a live export.
+- The server's `mysql:8` container publishes port 3306 only on `127.0.0.1`. Its presence does not prove that it contains the source catalog; inspect the server's database inventory and confirm with the owner before exporting or changing anything.
 - Dumped table: `movie(id INT NOT NULL, name VARCHAR(255) NOT NULL, rating INT NULL)`, using InnoDB and `utf8mb4_unicode_ci`. The dump has no release-year column.
 - The local PostgreSQL movie table contains 345 rows and 344 distinct titles. Its legacy columns were `id`, `name`, and nullable `rating`; release-year and account ownership were added later.
 - Ratings range from 0 to 10. The owner confirmed that 0 means unrated, so map 0 to null. The replacement CSV contains 206 rated records and 139 unrated records.
