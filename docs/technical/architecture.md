@@ -54,14 +54,17 @@ The owner already uses Nginx Proxy Manager in Docker as a reverse proxy; it shar
 - `MovieService` and `MovieServiceImpl` implement account-scoped paginated catalog operations.
 - `MovieRepository` extends `JpaRepository<Movie, Integer>` and provides account-scoped title and rating filters.
 - `MovieMapper` maps the JPA entity to `MovieDto` and trims movie names at write time.
-- Optional title search accepts 3–100 characters; page size is capped at 100. Ordering is stable by release year descending, then title and ID ascending.
+- Optional title search accepts 3–100 characters; page size is capped at 100. Ordering is configurable via `sort` (`rating_desc`, `rating_asc`, `year_desc`, `year_asc`, `title_asc`, `title_desc`), defaulting to rating descending (nulls last), then release year descending, then name and ID ascending.
 - Spring Security uses Google OIDC, a verified-email allowlist, session authentication, and CSRF protection. See the authentication boundary above.
 
 ## Frontend (current implementation)
 
-- Angular 22, TypeScript 6, standalone application configuration. The root component implements a responsive sign-in view and account-scoped movie catalog with create, edit, confirmed delete, title search, and exact, inclusive-range, and unrated rating filters.
+- Angular 22, TypeScript 6, standalone application configuration. The root component implements a responsive sign-in view and account-scoped movie catalog with create, edit, confirmed delete, title search, multi-select rating filters, and pagination.
 - Startup checks `/api/auth/me`; writes fetch a CSRF token from `/api/auth/csrf` and send the backend-provided header. Google OAuth begins at `/oauth2/authorization/google`.
 - Catalog search, rating filters, ordering, and pagination are handled by the account-scoped `GET /api/movies` endpoint; the client requests at most 50 rows per page.
+- Catalog rows show title, year, and rating; selecting a row reveals Edit and Remove actions over it on both mobile and desktop. Edit and delete confirmation replace the selected row inline. The row animates its height to fit the panel and back when dismissed.
+- Add and edit forms use a two-column layout for Title and Year, followed by a full-width rating control. The edit form uses a segmented set of score buttons; clicking the selected score again clears the rating. The add form currently uses a dropdown. Invalid edit submissions show title/year validation messages below their respective inputs.
+- Active title or rating filters that return no results display “No matching movies.” Subtle panel and overlay animations respect `prefers-reduced-motion`.
 - Theme defaults to `prefers-color-scheme`; manual override is stored in local storage on that browser. Cross-device account preference persistence is not implemented.
 - Angular's development server proxies `/api`, `/oauth2`, and `/login` to `http://localhost:8080`. Production builds use `/movies/` as the app base path; movie endpoints are under `/api/movies` so they do not conflict with the site path. NPM routes the site and API prefixes to the frontend gateway; it proxies API/OAuth requests to the backend over the private app network.
 - Recommendation lookup is not implemented.
@@ -90,8 +93,8 @@ The owner already uses Nginx Proxy Manager in Docker as a reverse proxy; it shar
 
 | Method and path | Behavior |
 |---|---|
-| `GET /api/movies?page=0&size=50` | Requires an authenticated, allowlisted session; returns a stable, account-scoped page with at most 100 rows. Results sort by release year descending, then name and ID ascending. |
-| `GET /api/movies?q={term}&ratingMode={mode}` | Optional filters: title `q` (3–100 chars), `ratingMode=all\|unrated\|exact\|range`, `rating` for exact match, or `minRating` and `maxRating` for inclusive range. Filters combine with AND. Response contains `items`, `page`, `size`, `totalItems`, `totalPages`, and `hasNext`. |
+| `GET /api/movies?page=0&size=50` | Requires an authenticated, allowlisted session; returns a stable, account-scoped page with at most 100 rows. Default sort is rating descending (`nulls last`), then release year descending, name and ID ascending. Supports `sort=rating_desc|rating_asc|year_desc|year_asc|title_asc|title_desc`. |
+| `GET /api/movies?q={term}&ratings={csv}&includeUnrated={bool}` | Optional filters: title `q` (3–100 chars), multi-select `ratings` (e.g. `8,9,10`), `includeUnrated=true`, or legacy `ratingMode=all\|unrated\|exact\|range`. Filters combine with AND. Response contains `items`, `page`, `size`, `totalItems`, `totalPages`, and `hasNext`. |
 | `POST /api/movies` | Requires authentication and CSRF. Creates `{name, releaseYear, rating}` under the authenticated account; returns HTTP 201 and the created DTO. |
 | `PUT /api/movies/{id}` | Requires authentication and CSRF. Replaces the supplied movie fields only when the ID belongs to the authenticated account; returns HTTP 200 or 404. |
 | `DELETE /api/movies/{id}` | Requires authentication and CSRF. Deletes only an account-owned movie; returns HTTP 204 or 404. |

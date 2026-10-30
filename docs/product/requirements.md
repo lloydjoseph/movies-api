@@ -10,9 +10,8 @@ The following is agreed product scope, but is not all implemented yet:
 - The owner manually enters movie information. Title and release year are required; ranking is optional. Release year helps distinguish movies with the same title.
 - Ranking is an optional integer from 1 to 10, inclusive.
 - The owner can add, view, edit, and remove movies.
-- The owner can search/filter by partial title matches with a minimum query length of 3 characters.
-- The owner can filter by an exact ranking or by an inclusive ranking range (both endpoints are included).
-- The owner can filter for movies with no ranking (unrated).
+- The owner can search by partial title matches with a minimum query length of 3 characters.
+- The owner can filter by one or more exact ratings and include unrated movies.
 - When title and ranking filters are both active, a movie must satisfy both filters to appear (AND behavior).
 - The owner signs in with Google; movie content is available only to the owner's specifically authorized Google account.
 - The access policy should be extensible to authorize additional Google accounts through a whitelist, without redesigning movie ownership/access checks.
@@ -51,7 +50,10 @@ The initial owner account and any later allowlisted accounts will be managed thr
 - The Angular single-page application checks the existing backend session at startup. Signed-out visitors see a Google sign-in action; authorized sessions see their account-scoped catalog.
 - The site is named “Joseph’s Movies” and is intended to be served at `https://jlloyd.fr/movies/`. After Google sign-in, the backend returns the browser to this page and the app loads the signed-in account's catalog.
 - The catalog loads `/api/movies` in pages, displays title, release year, rating or an unrated marker, and supports adding, editing, and confirming movie deletion.
-- Title and rating filters are applied by the backend across the full account catalog and combined with AND behavior. The interface loads more results on request.
+- The catalog offers title search and rating filters. Rating filters are multi-select: choose one or more scores, optionally include unrated movies, or select All. Title and rating filters are applied by the backend across the full account catalog and combined with AND behavior. The interface loads more results on request and shows “No matching movies.” when active filters return no results.
+- Movie rows show the title, release year, and rating together. Selecting a row reveals Edit and Remove actions over it. Choosing Edit or Remove replaces that row with an inline editor or delete confirmation, respectively; Cancel returns to the row. The row expands or contracts to fit the panel, and panels use subtle motion unless the browser requests reduced motion.
+- Add and edit forms use a two-column layout with Title and Year above a full-width rating control. The edit form uses one contiguous button per score; selecting the active score again clears it to unrated. The add form currently uses a rating dropdown. Title and year validation errors are shown below the corresponding input after an invalid edit submission.
+- The catalog and forms adapt to phone, tablet, and desktop widths. Movie titles can wrap on mobile, and desktop row actions are shown through the same row-selection overlay.
 - Theme defaults to the device preference and a manual override is saved in browser local storage. It is not synchronized across devices.
 - Recommendations are not yet available in the interface.
 
