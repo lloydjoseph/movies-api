@@ -1,0 +1,117 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_confirmed:
+        description: Confirm a current production database backup exists
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Require the production branch
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "Production deployments must be run from the main branch."
+            exit 1
+          fi
+
+      - name: Require a production database backup
+        env:
+          BACKUP_CONFIRMED: ${{ inputs.backup_confirmed }}
+        run: |
+          if [ "$BACKUP_CONFIRMED" != "true" ]; then
+            echo "Create and verify a production database backup before deploying."
+            exit 1
+          fi
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run backend tests
+        working-directory: backend
+        run: ./mvnw -B test
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm test -- --watch=false
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Deploy tested commit
+        env:
+          SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+        run: |
+          ssh -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" "bash -s -- '$GITHUB_SHA'" <<'REMOTE'
+          set -euo pipefail
+          deploy_sha="$1"
+          cd /home/joseph/movies-api
+
+          if [ "$(git branch --show-current)" != "main" ]; then
+            echo "Server checkout must be on main."
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Server checkout has local changes; refusing to deploy."
+            exit 1
+          fi
+
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" != "$deploy_sha" ]; then
+            echo "The selected commit is no longer the tip of origin/main; dispatch again."
+            exit 1
+          fi
+          git merge --ff-only origin/main
+
+          compose=(docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml -p movies-production)
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --build
+          "${compose[@]}" ps
+          REMOTE

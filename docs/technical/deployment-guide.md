@@ -1,13 +1,16 @@
 # Manual deployment guide
 
+Production deployment can be started from the GitHub Actions **Deploy production** workflow. Before dispatching, create and verify a current database backup. The workflow tests the selected commit on `main`, requires confirmation of that backup, then connects to the server over SSH and rebuilds the production Compose services.
+
 **Status:** Release procedure for the owner's self-hosted server. The source repository is private on GitHub and the server checkout path is `/home/joseph/movies-api`. The production Compose file is `docker-compose.production.yml`; host Nginx will route the apex domain to the frontend gateway bound at `127.0.0.1:8188`. NPM, its media network, and existing Jellyfin routes stay unchanged. The production environment path is `/etc/movies-api/production.env`; choose and verify a protected database backup location before migration/cutover.
 
-Deployments are manual and expected only every few months. Before first use, review the production Compose configuration, establish the server-side environment file and backup location, obtain a valid certificate for `jlloyd.fr`, and rehearse database restore.
+Deployments are expected only every few months. Before using the workflow, review the production Compose configuration, establish its GitHub environment secrets, prepare the server SSH access described below, and rehearse database restore.
 
 ## One-time setup needed before the first release
 
 - Clone this repository to `/home/joseph/movies-api` on the server.
 - Configure a repository-scoped read-only GitHub deploy key on the server before cloning. Keep the private key outside the repository with restrictive file permissions; add only the public key to the GitHub repository's deploy keys with read-only access. (Chosen approach; setup remains to be done.)
+- Create a dedicated SSH key for GitHub Actions and authorize its public key for the deployment user on the server. In the repository's **Settings → Environments**, create an environment named `production` and add these environment secrets: `PRODUCTION_SSH_HOST`, `PRODUCTION_SSH_USER`, `PRODUCTION_SSH_PRIVATE_KEY`, and `PRODUCTION_SSH_KNOWN_HOSTS`. Store a verified host-key entry in `PRODUCTION_SSH_KNOWN_HOSTS`; do not disable SSH host-key checking. The deployment user must be able to run Git and Docker Compose, and the server checkout must remain clean on branch `main`.
 - The `joseph` shell account reported that it is not in the sudoers file. The owner confirmed separate root/admin access; run the `/etc`, Nginx, and Certbot setup commands from that authorized administrative session.
 - The server already has host Nginx on public ports 80/443. Keep it and its `ask.jlloyd.fr` and `watch.jlloyd.fr` virtual hosts unchanged; do not alter router forwards or NPM.
 - DNS for `jlloyd.fr` points to the server's router address. Obtain a separate Let's Encrypt certificate for the apex; the existing certificates cover only `ask.jlloyd.fr` and `watch.jlloyd.fr`.
