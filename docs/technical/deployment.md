@@ -1,19 +1,18 @@
 # Deployment
 
-**Status:** Target hosting model and public app path are agreed. A production Compose stack, container build files, private app networks, and an Nginx frontend gateway are in the repository. The server's existing host Nginx will route the movie application; NPM and its media stack remain untouched. Production secrets, the apex certificate, data migration, and live verification remain to be completed.
+**Status (2026-11-01):** The owner reports the movie app is already running on the server. A Docker inventory confirmed the `movies-production` Compose project has frontend, backend, and healthy PostgreSQL containers; the frontend is bound to `127.0.0.1:8188`, and PostgreSQL uses the named volume `movies-production_postgres_data`. The root session confirmed `/etc/movies-api/production.env` is readable, but access by the runner user has not been verified. The GitHub Actions self-hosted runner has been installed and started as a service, per the owner's report. The live catalog contents/count, deployed commit, runner-user Docker access, apex certificate, public Nginx route, and backup/restore status have not been verified. Do not treat this as a first-time deployment or assume the database is empty.
 
 ## Agreed target
 
 - The owner operates the application on their own server, located on their network.
 - Docker Compose is the intended method for deploying the movie application on that server.
 - The movie application's deployment Compose definition should be version-controlled in this repository; server-specific values and secrets stay outside Git.
-- The repository has not yet been cloned to the server. Its planned checkout path is `/home/joseph/movies-api`.
-- The source repository is hosted on GitHub and is private; the server needs a credential to clone and pull it. The chosen method is a repository-scoped read-only deploy key kept on the server, outside the repository. It has not yet been configured.
-- The movie application will have its own PostgreSQL container, managed with its app deployment rather than reusing another service's database.
-- The existing movie database must be migrated into the new PostgreSQL database before cutover. An inspected dump identifies MariaDB 11.8.6, but it is not yet confirmed whether the server's MySQL 8 container is the live source. See the [data migration plan](data-migration.md).
+- The server Compose inventory lists `/home/joseph/movies-api/docker-compose.production.yml` for `movies-production`. The deployment workflow checks out the selected commit in the runner workspace and targets this same Compose project name.
+- The running `movies-production` PostgreSQL container uses `movies-production_postgres_data`. Preserve this volume during updates; never use `docker compose down -v` for routine deployment or troubleshooting.
+- The server also reports Compose project `movies-api` as `created(1), exited(2), running(1)` with config paths `/home/joseph/movies-api/docker-compose.production.yml` and `/root/movies-api/docker-compose.yml`. Its running `mysql:8` container is labeled project `movies-api`, service `mysql`, and has loopback-only port `3306`. Its relationship to the movie catalog is unknown. An inspected dump identifies MariaDB 11.8.6, but neither establishes that MySQL as the source nor proves that the active PostgreSQL catalog needs migration. Inspect and compare the live catalogs before any import or migration. See the [data migration plan](data-migration.md).
 - The movie application's public entry point will be isolated from the existing media-services Docker network.
-- Deployments will be performed manually because updates are expected only every few months. Automated build/deploy workflows are not currently planned.
-- The application is reachable over the internet using the owner's domain name.
+- Production updates are manually dispatched through GitHub Actions; the workflow tests the checked-out commit and updates the `movies-production` Compose stack on the self-hosted runner.
+- The target public site is `https://jlloyd.fr/movies/`; public reachability of the movie app has not been confirmed.
 - The public site path is `https://jlloyd.fr/movies/`. Router ports 80/443 reach the Debian host's Nginx service, which will proxy requests for `jlloyd.fr` to the frontend gateway at `127.0.0.1:8188`. The gateway serves Angular and proxies `/api/`, `/oauth2/`, and `/login/` to Spring Boot on the private app network, preserving same-origin session cookies and CSRF. Nginx Proxy Manager remains on its current `8888`/`4443` host ports for the existing services; its Compose project and the Jellyfin routes are not changed.
 - Set backend `APP_FRONTEND_URL=https://jlloyd.fr/movies/` and register `https://jlloyd.fr/login/oauth2/code/google` as the Google OAuth callback.
 - The application must work in a browser on phones, tablets, and desktop computers.
@@ -61,7 +60,7 @@ These are observed hardware details, not a measured minimum requirement or capac
 
 ## Deployment state and remaining checks
 
-- The production Compose deployment, repository checkout, apex certificate, host-Nginx movie site, and production environment file have not been confirmed as installed on the server. The repository checkout path is planned as `/home/joseph/movies-api`.
+- The `movies-production` stack and repository Compose path were confirmed in the server inventory on 2026-11-01. The owner reports the runner service runs. A root session confirmed the production environment file is readable; runner-user access remains unverified. The apex certificate, host-Nginx movie site, public route, current deployed commit, and production catalog contents/count remain unverified.
 - DNS A records for `jlloyd.fr` and `movies.jlloyd.fr` resolve to the router's public address. This was reported as observed; public HTTPS for the apex is not yet verified.
 - Preserve router forwarding and existing `ask`/`watch` virtual hosts. Add only the new `jlloyd.fr` host-Nginx virtual host after obtaining and verifying its certificate.
 - The committed production Compose file binds the movie frontend gateway to `127.0.0.1:8188`; proxy to it from host Nginx. Do not attach the movie stack to `media-stack_default`, create an NPM route, or modify NPM.
@@ -69,7 +68,7 @@ These are observed hardware details, not a measured minimum requirement or capac
 - Keep production secrets and server-specific configuration in protected server-side files, never in Git or chat.
 - Obtain and verify a Let's Encrypt certificate for `jlloyd.fr` using the existing Certbot Nginx plugin, then enable the repository's host-Nginx site config.
 - Verify public HTTPS and Certbot renewal for the apex domain.
-- Confirm production catalog size, account count, and expected usage during migration planning.
+- Confirm production catalog size and account count before and after the next update. Determine whether the separate `movies-api` MySQL container contains any catalog data not already in the production PostgreSQL database.
 
 ## Operations and recovery — Open
 
@@ -82,15 +81,15 @@ These are observed hardware details, not a measured minimum requirement or capac
 
 ## Deployment procedure
 
-See the [manual deployment guide](deployment-guide.md) for the release checklist. Server-side environment-file and backup paths remain placeholders until they are established on the host.
+See the [manual deployment guide](deployment-guide.md) for the release checklist. The production environment-file path is established; the protected backup location still needs to be selected and verified.
 
-The existing database must be migrated before cutover; see the [data migration plan](data-migration.md).
+The active production database is the PostgreSQL service in `movies-production`. Do not plan a migration or cutover until its contents have been compared with the separate MySQL service and the local catalog; see the [data migration plan](data-migration.md).
 
 ## Production readiness gaps in the current repository
 
-- Copy [production.env.example](../../production.env.example) to a protected server-side environment file outside the checkout. Supply database and OAuth credentials there; never use the local Compose stack as production.
+- `/etc/movies-api/production.env` exists. The root session confirmed it is readable, but verify that the runner service user can read it; do not overwrite it by copying the example template over it. Keep credentials there, outside Git, and never print or share its contents.
 - The production environment file has separate database bootstrap-admin and application-role credentials. Keep both private; the backend receives only `DB_USERNAME` and `DB_PASSWORD`. PostgreSQL creates the app role from the initialization script only for a new empty volume. If a database volume already exists, provision/grant the app role through an administrator before starting the backend.
-- Apply and verify Liquibase against the production database before cutover. Hibernate validates the resulting schema at startup.
+- The production PostgreSQL service is already running. A deployment may update its schema through Liquibase; back up the active database and verify the catalog before running an update.
 - Configure host Nginx for `jlloyd.fr` to proxy requests to `127.0.0.1:8188`. The production Compose file binds only the frontend gateway to this loopback port; PostgreSQL and backend ports are not published. Do not change NPM or the existing media-stack networks.
 - Set `APP_FRONTEND_URL=https://jlloyd.fr/movies/`, register the production Google OAuth callback, and keep `SESSION_COOKIE_SECURE=true`.
 - Verify the frontend gateway's HSTS, CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and Permissions Policy headers through the public HTTPS host Nginx route.

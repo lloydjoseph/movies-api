@@ -1,17 +1,16 @@
 # Session handoff
 
-Updated: 2026-10-30
+Updated: 2026-11-01
 
-## Latest handoff (2026-10-31)
+## Latest handoff (2026-11-01)
 
-- The user is setting up one-click manual production deployment via GitHub Actions. Commit `41eff9f` adds `.github/workflows/deploy-production.yml` and documents the required GitHub `production` environment secrets. Backend tests, frontend tests (8), and frontend build passed when the workflow was added.
-- The hosted-runner deployment failed because GitHub cannot reach the server over SSH (port 22 connection timed out). Do not recommend exposing SSH publicly as the quick fix. User was advised to use a self-hosted GitHub Actions runner on the server.
-- Next: have the user register a Linux x64 self-hosted runner at **Repository → Settings → Actions → Runners → New self-hosted runner**, following the commands GitHub displays directly on the server. Keep its temporary registration token on the server. Install/run the service as the deployment user (likely `joseph`, not root); ensure it has Docker/Compose access. Restrict runner access to this private repository and trusted deployment workflow/branch.
-- Then update the workflow: run on the self-hosted runner (with matching labels) instead of `ubuntu-latest`; keep the `main` branch gate, manual trigger, production environment/backup confirmation, tests, and concurrency guard. Remove SSH setup/secrets and deploy directly from the checked-out workflow workspace on the server using `/etc/movies-api/production.env`, `docker-compose.production.yml`, and Compose project `movies-production`. `actions/checkout` provides the selected commit in the runner workspace, so do not fetch/merge a separate server checkout as the current SSH workflow does.
-- The actual production Compose stack is named `movies-production` and currently runs frontend/backend/Postgres; the gateway binds `127.0.0.1:8188`. Preserve the existing Postgres volume and do not use `down -v`. Workflow must continue requiring a current backup before the user confirms deployment.
-- After switching to the self-hosted runner and verifying a successful deployment, remove the now-unused `PRODUCTION_SSH_*` GitHub secrets and the temporary SSH deployment key if the user agrees. Never ask them to paste secrets or tokens.
-- Recent relevant commits: `41984d6` adds the orange Lucide clapperboard favicon; `2210a70` removes unrelated IDE files inadvertently included in that commit; `41eff9f` adds the first GitHub deployment workflow. Check whether these commits are pushed before proceeding.
-- The local worktree has unrelated IntelliJ modifications/untracked files and `backend/.m2/`; do not commit or clean them. Check `git status` before editing or committing.
+- The user pushed the workflow update to `main`: production dispatches run on `[self-hosted, linux, x64]`, gate the job to `main`, test the checked-out commit, and run Compose directly in the runner workspace using `/etc/movies-api/production.env` and project `movies-production`.
+- The owner registered the repository runner and reports it is running as a service under `joseph`. `/etc/movies-api/production.env` was confirmed readable from a root shell only; verify access as `joseph` before dispatching. Docker access by the runner service user also remains unverified. Do not request or record env contents. A runner registration token appeared in chat; it must not be reused.
+- Server inventory supplied on 2026-11-01 confirms Compose project `movies-production` is running frontend, backend, and healthy PostgreSQL. Frontend binds `127.0.0.1:8188`; PostgreSQL mounts `movies-production_postgres_data` at `/var/lib/postgresql/data`. This is an existing live stack, not a first deployment. Never remove this volume or use `down -v`.
+- A separate Compose project `movies-api` is listed as created/exited/running and its running `mysql:8` service has project label `movies-api`, service `mysql`, and loopback port `3306`. The contents/relationship of that MySQL database and the production PostgreSQL catalog are unknown. Do not assume a migration is needed or import data until both catalogs have been compared.
+- The active catalog's row/account counts, deployed commit, verified PostgreSQL backup/restore, apex certificate, host-Nginx site, and public HTTPS route remain unverified. Before the next workflow dispatch, inspect the live catalog, take and validate a backup, confirm Compose will reuse `movies-production_postgres_data`, then deploy. The workflow's backup checkbox is only an acknowledgement; it does not create or validate a backup.
+- Update deployment, data-migration, and shared context docs to reflect these observations; do not record secrets or exported catalog data.
+- The worktree has unrelated IntelliJ changes/untracked files and `backend/.m2/`; do not stage or clean them.
 
 ## Latest handoff (2026-10-30)
 
@@ -50,18 +49,18 @@ Updated: 2026-10-30
 - Active title or rating filters with no results show “No matching movies.” Frontend currently has 8 passing tests and `npm run build` succeeds.
 - Backend database properties now require `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`. Local development uses an ignored `backend/.env` and the `local` profile. Production OAuth callback URLs use forwarded headers only in the `production` profile; keep backend traffic restricted to the trusted proxy network.
 - Product direction: “Joseph’s Movies”, orange accent, Fira Sans, larger relative text, and Tailwind styling. Production URL: `https://jlloyd.fr/movies/`. The app build uses that base path; movie APIs are under `/api/movies` to avoid a URL collision. Configure production `APP_FRONTEND_URL=https://jlloyd.fr/movies/`.
-- The repository includes production Dockerfiles, a private-network Compose stack, and an Nginx gateway with security headers. The agreed ingress is Debian host Nginx proxying to the gateway on `127.0.0.1:8188`; do not change the router rules, NPM, or media network. The server still needs the apex certificate, protected production environment file, OAuth callback, data migration, and a tested backup/restore procedure.
+- The repository includes production Dockerfiles, a private-network Compose stack, and an Nginx gateway with security headers. The server's `movies-production` Compose stack is confirmed running and its production environment file is readable. The planned ingress is Debian host Nginx proxying to `127.0.0.1:8188`; apex certificate/public routing and the production OAuth callback remain unverified. Do not change router rules, NPM, or media networks.
 - Server observations and deployment facts from 2026-10-30 are recorded in [deployment](technical/deployment.md): host Nginx owns ports 80/443; NPM is the `npm` container in Compose project `media-stack`, attached to `media-stack_default`, with host ports 81/8888/4443; the media containers and their observed ports are listed there. The `joseph` account cannot use `sudo`, so use the owner's separate root/admin access for host changes.
-- The inspected source dump identifies MariaDB 11.8.6. The server has a `mysql:8` container with loopback-only port 3306, but it is not confirmed as the live source of the movie catalog.
+- The inspected source dump identifies MariaDB 11.8.6. The server has a separate `movies-api` project running a `mysql:8` container on loopback port 3306; neither the dump nor the container is confirmed as a source of records missing from production PostgreSQL.
 - One CSV title differed from the database only by a leading space. The backfill did not update titles, preserving the database's original title.
 
 ## Next steps
 
-1. Do not drop the Docker volume, truncate the table, or re-run an insert-only import.
-2. Restart the backend with `SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run` and verify the signed-in movie list loads without the `lower(bytea)` SQL error. Then manually verify search, filters, and CRUD.
-3. Commit the pending query fix only after reviewing the diff. Keep `backend/.m2/` out of Git.
-4. Push the reviewed commits if desired, then configure the host-Nginx certificate/site and protected production environment using [the deployment guide](technical/deployment-guide.md). Do not alter router forwarding, NPM, Jellyfin, or media networks.
-5. Before production cutover, identify the live source database, rehearse and validate migration, and verify database backup/restore. Do not treat an empty production database as authoritative.
+1. Do not drop `movies-production_postgres_data`, truncate tables, or run an insert-only import.
+2. Record current production movie and account counts, determine whether the separate MySQL database has any missing records, and verify the active PostgreSQL backup/restore path.
+3. Before dispatching the pushed workflow, verify the `production` environment, runner labels/service, database backup, and Compose volume mapping. The deploy job must reuse the existing `movies-production` project and data volume.
+4. Verify the apex certificate, host-Nginx site, and public HTTPS route; preserve router forwarding, NPM, Jellyfin, and media networks.
+5. After a successful release, record the deployed commit and compare catalog counts; manually smoke-test sign-in and CRUD.
 6. Remaining product work includes cross-device theme preference and movie recommendations.
 
 ## Repository notes

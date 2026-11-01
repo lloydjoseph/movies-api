@@ -1,6 +1,6 @@
 # Data migration plan
 
-**Status:** The local PostgreSQL catalog backfill and Liquibase schema migration are complete and verified. The migration plan remains required before production cutover. The inspected dump identifies MariaDB 11.8.6 and a single `movie` table; the live source location, backup/restore path, and cutover process still need confirmation.
+**Status (2026-11-01):** The local PostgreSQL catalog backfill and Liquibase schema migration are complete and verified. The owner reports the app is running on the server; a Docker inventory confirms the active `movies-production` PostgreSQL service and its `movies-production_postgres_data` volume. The catalog contents/count and restore procedure in that live database have not been verified. A separate `movies-api` project also has a running MySQL 8 container, while an inspected dump identifies MariaDB 11.8.6. Determine whether either contains data not present in the active production PostgreSQL database before planning any migration. The existing production database may already be the authoritative target; do not perform a first-time cutover or import by assumption.
 
 ## Goal
 
@@ -15,6 +15,7 @@ Move the previous application's existing movie catalog and ratings into the new 
 
 ## Source details to establish
 
+- Server inventory reported on 2026-11-01: Compose project `movies-production` has running frontend, backend, and healthy PostgreSQL services. PostgreSQL uses `movies-production_postgres_data`; the frontend binds `127.0.0.1:8188`. The separate `movies-api` project has a running MySQL 8 container on loopback port 3306. These observations identify services and storage, not which catalog is authoritative or the data in either database.
 - Database engine/version in the dump: MariaDB 11.8.6. This does not establish whether the home server's MySQL 8 container hosts the live source; confirm before planning a live export.
 - The server's `mysql:8` container publishes port 3306 only on `127.0.0.1`. Its presence does not prove that it contains the source catalog; inspect the server's database inventory and confirm with the owner before exporting or changing anything.
 - Dumped table: `movie(id INT NOT NULL, name VARCHAR(255) NOT NULL, rating INT NULL)`, using InnoDB and `utf8mb4_unicode_ci`. The dump has no release-year column.
@@ -38,24 +39,24 @@ Do not put credentials, connection strings containing secrets, or exported perso
 
 ## Safe migration sequence
 
-1. Inventory the source schema and data without modifying it.
-2. Agree on a field mapping and explicit rules for missing or invalid values.
-3. Make a full source backup and verify that it can be restored.
-4. Build an idempotent export/import process for production and run it against a disposable PostgreSQL database.
-5. Compare source and target row counts; validate title/year completeness, ranking range, account ownership, and representative records. Reconcile every skipped or transformed row.
-6. Repeat the migration from a fresh target database to prove the procedure is reproducible.
-7. At cutover, pause source writes, take a final backup/export, run the migration, validate the target, then point the application at PostgreSQL.
-8. Keep the source unchanged and available until the new app has been used successfully and the owner accepts the migration. Define the rollback decision and restore steps before cutover.
+1. Inventory the active production PostgreSQL schema and catalog, and the separate MySQL service, without modifying either. Record catalog and account counts and determine which database the running app uses.
+2. If production PostgreSQL already contains the complete intended catalog, do not migrate it; verify representative records and treat that database as the current source of truth.
+3. If comparison shows records exist only in another source, agree on a field mapping and explicit rules for missing or invalid values before any migration.
+4. Make a full backup of each relevant source and verify restore to separate test databases.
+5. If migration is needed, build an idempotent export/import process and run it against a disposable PostgreSQL database. Compare row counts; validate title/year completeness, ranking range, ownership, and representative records. Reconcile every skipped or transformed row.
+6. Repeat the migration from a fresh test target to prove the procedure is reproducible.
+7. For an approved production migration, pause source writes, take a final backup/export, migrate, validate the target, and only then direct the app to the intended database.
+8. Keep source databases unchanged and available until the owner accepts the result. Define rollback and restoration steps before migration.
 
 ## Acceptance criteria
 
 - Every in-scope source record is present in the target or is accounted for in an explicit owner-approved exception list.
 - Every migrated record has a valid title and release year, an optional ranking in range, and the correct owner account association.
 - All 345 local rows have a release year and owner assignment; no year was silently invented or discarded. Production migration still needs independent validation.
-- The source backup and target restore procedures have been exercised before cutover.
+- The active production PostgreSQL database and any migration source have verified backups and exercised restore procedures before a schema-changing release or migration.
 - A repeatable migration artifact and execution log exist without embedding secrets or exporting personal data into the repository.
 
 ## Open questions
 
-- Where does the live source database run? Is it the server's MySQL 8 container, or does the dump come from another database?
+- What data and row counts are in the active production PostgreSQL database and the separate MySQL 8 database? Is either missing records present in the other?
 - Can writes be paused during final migration, and how long is acceptable for cutover?
