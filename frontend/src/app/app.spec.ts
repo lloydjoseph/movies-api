@@ -36,6 +36,31 @@ describe('App', () => {
     expect(rendered.textContent).toContain('Arrival');
   });
 
+  it('uses the edit rating control and layout in the add form', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const rendered = fixture.nativeElement as HTMLElement;
+    Array.from(rendered.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.type === 'button' && button.textContent?.includes('Add movie'))
+      ?.click();
+    fixture.detectChanges();
+
+    const editor = rendered.querySelector<HTMLElement>('[aria-labelledby="editor-heading"]');
+    const ratingButtons = editor?.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Rating"] button');
+    expect(editor?.querySelector('form')?.className).toContain('grid-cols-[minmax(0,1fr)_5rem]');
+    expect(ratingButtons?.length).toBe(10);
+    expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 10"]')?.getAttribute('aria-pressed')).toBe('false');
+
+    editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.click();
+    fixture.detectChanges();
+    expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.getAttribute('aria-pressed')).toBe('true');
+    editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.click();
+    fixture.detectChanges();
+    expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('renders sort controls and defaults to rating descending', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
