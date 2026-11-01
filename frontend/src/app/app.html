@@ -80,26 +80,26 @@
         }
 
         @if (saveConfirmation(); as confirmation) {
-          <section class="movie-panel-enter mt-6 flex min-w-0 items-center gap-3 rounded-lg border border-stone-200 bg-stone-100 p-4 transition-opacity duration-300 dark:border-neutral-800 dark:bg-neutral-900 sm:gap-5 sm:p-5 motion-reduce:transition-none"
+          <section class="movie-panel-enter mt-6 flex min-w-0 flex-col items-start gap-3 rounded-lg border border-stone-200 bg-stone-100 p-4 transition-opacity duration-300 dark:border-neutral-800 dark:bg-neutral-900 sm:p-5 motion-reduce:transition-none"
             [class.opacity-0]="saveConfirmationFading()"
             aria-live="polite">
-            <p class="min-w-0 flex-1 break-words text-base font-semibold sm:text-lg">{{ confirmation.name }}</p>
-            <div class="flex shrink-0 items-center gap-2 sm:gap-3">
+            <span class="rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide"
+              [class.bg-green-200]="confirmation.action === 'created'"
+              [class.text-green-900]="confirmation.action === 'created'"
+              [class.dark:bg-green-900]="confirmation.action === 'created'"
+              [class.dark:text-green-100]="confirmation.action === 'created'"
+              [class.bg-blue-200]="confirmation.action === 'updated'"
+              [class.text-blue-900]="confirmation.action === 'updated'"
+              [class.dark:bg-blue-900]="confirmation.action === 'updated'"
+              [class.dark:text-blue-100]="confirmation.action === 'updated'">
+              {{ confirmation.action === 'created' ? 'Add' : 'Edit' }}
+            </span>
+            <div class="flex w-full min-w-0 items-center gap-3 sm:gap-5">
+              <p class="min-w-0 flex-1 break-words text-base font-semibold sm:text-lg">{{ confirmation.name }}</p>
               <span class="text-sm text-stone-600 dark:text-neutral-300 sm:text-base">{{ confirmation.releaseYear }}</span>
               <span class="inline-flex min-w-20 items-center justify-center rounded-md px-3 py-2 text-sm font-semibold sm:text-base"
                 [style.background-color]="ratingColor(confirmation.rating)" [style.color]="ratingTextColor(confirmation.rating)">
                 {{ confirmation.rating === null ? 'Unrated' : confirmation.rating + ' / 10' }}
-              </span>
-              <span class="rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide"
-                [class.bg-green-200]="confirmation.action === 'created'"
-                [class.text-green-900]="confirmation.action === 'created'"
-                [class.dark:bg-green-900]="confirmation.action === 'created'"
-                [class.dark:text-green-100]="confirmation.action === 'created'"
-                [class.bg-blue-200]="confirmation.action === 'updated'"
-                [class.text-blue-900]="confirmation.action === 'updated'"
-                [class.dark:bg-blue-900]="confirmation.action === 'updated'"
-                [class.dark:text-blue-100]="confirmation.action === 'updated'">
-                {{ confirmation.action === 'created' ? 'Add' : 'Edit' }}
               </span>
             </div>
           </section>
