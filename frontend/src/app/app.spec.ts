@@ -61,7 +61,7 @@ describe('App', () => {
     expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('shows an inline green or blue movie summary after create or edit', async () => {
+  it('shows an inline add or edit summary with table-style movie details', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     fixture.detectChanges();
@@ -77,9 +77,11 @@ describe('App', () => {
     fixture.detectChanges();
 
     let confirmation = rendered.querySelector<HTMLElement>('section[aria-live="polite"]');
-    expect(confirmation?.textContent).toContain('Movie added: “New movie”');
-    expect(confirmation?.textContent).toContain('2025 · Unrated');
-    expect(confirmation?.classList.contains('bg-green-50')).toBe(true);
+    expect(confirmation?.textContent).toContain('New movie');
+    expect(confirmation?.textContent).toContain('2025');
+    expect(confirmation?.textContent).toContain('Unrated');
+    expect(confirmation?.textContent).toContain('Add');
+    expect(confirmation?.classList.contains('bg-stone-100')).toBe(true);
     expect(confirmation?.classList.contains('fixed')).toBe(false);
     expect(rendered.querySelector('[aria-label="Movie collection"]')?.previousElementSibling).toBe(confirmation);
 
@@ -92,13 +94,42 @@ describe('App', () => {
     fixture.detectChanges();
 
     confirmation = rendered.querySelector<HTMLElement>('section[aria-live="polite"]');
-    expect(confirmation?.textContent).toContain('Movie updated: “Arrival Updated”');
-    expect(confirmation?.textContent).toContain('2017 · 8 / 10');
-    expect(confirmation?.classList.contains('bg-blue-50')).toBe(true);
+    expect(confirmation?.textContent).toContain('Arrival Updated');
+    expect(confirmation?.textContent).toContain('2017');
+    expect(confirmation?.textContent).toContain('8 / 10');
+    expect(confirmation?.textContent).toContain('Edit');
+    expect(confirmation?.querySelector('button')).toBeNull();
+    expect(confirmation?.querySelector('[style*="background-color"]')).not.toBeNull();
 
-    confirmation?.querySelector<HTMLButtonElement>('button')?.click();
+    app.closeSaveConfirmation();
     fixture.detectChanges();
     expect(rendered.querySelector('section[aria-live="polite"]')).toBeNull();
+  });
+
+  it('fades and removes the save notification after three seconds', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const app = fixture.componentInstance;
+
+    vi.useFakeTimers();
+    try {
+      app.openCreateForm();
+      app.title = 'New movie';
+      app.releaseYear = 2025;
+      await app.saveMovie();
+      fixture.detectChanges();
+
+      vi.advanceTimersByTime(2700);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('section[aria-live="polite"]')?.classList.contains('opacity-0')).toBe(true);
+
+      vi.advanceTimersByTime(300);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('section[aria-live="polite"]')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renders sort controls and defaults to rating descending', async () => {

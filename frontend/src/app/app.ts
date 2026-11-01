@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { CatalogQuery, Movie, MovieApiService, MovieInput, MovieSort, SignedInUser } from './movie-api.service';
@@ -16,7 +16,7 @@ type SaveConfirmation = {
   imports: [FormsModule],
   templateUrl: './app.html',
 })
-export class App {
+export class App implements OnDestroy {
   private readonly api = inject(MovieApiService);
 
   readonly user = signal<SignedInUser | null>(null);
@@ -36,6 +36,7 @@ export class App {
   readonly editorOpen = signal(false);
   readonly editingMovie = signal<Movie | null>(null);
   readonly saveConfirmation = signal<SaveConfirmation | null>(null);
+  readonly saveConfirmationFading = signal(false);
   readonly deletingMovie = signal<Movie | null>(null);
   readonly activeMovieActionsId = signal<number | null>(null);
   readonly theme = signal<Theme>(this.readThemePreference());
@@ -49,9 +50,16 @@ export class App {
   private readonly pageSize = 50;
   private requestId = 0;
   private queryTimer: ReturnType<typeof setTimeout> | null = null;
+  private saveConfirmationTimer: ReturnType<typeof setTimeout> | null = null;
+  private saveConfirmationDismissTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     void this.loadSession();
+  }
+
+  ngOnDestroy(): void {
+    if (this.queryTimer) clearTimeout(this.queryTimer);
+    this.clearSaveConfirmationTimers();
   }
 
   async loadSession(): Promise<void> {
@@ -300,12 +308,23 @@ export class App {
       else await this.api.createMovie(movie);
 
       this.editorOpen.set(false);
+      this.clearSaveConfirmationTimers();
+      this.saveConfirmationFading.set(false);
       this.saveConfirmation.set({
         action: current ? 'updated' : 'created',
         name: movie.name,
         releaseYear: movie.releaseYear,
         rating: movie.rating,
       });
+      this.saveConfirmationTimer = setTimeout(() => {
+        this.saveConfirmationFading.set(true);
+        this.saveConfirmationDismissTimer = setTimeout(() => {
+          this.saveConfirmation.set(null);
+          this.saveConfirmationFading.set(false);
+          this.saveConfirmationDismissTimer = null;
+        }, 300);
+        this.saveConfirmationTimer = null;
+      }, 2700);
       await this.reloadMovies();
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Could not save the movie. Check the details and try again.'));
@@ -315,7 +334,16 @@ export class App {
   }
 
   closeSaveConfirmation(): void {
+    this.clearSaveConfirmationTimers();
     this.saveConfirmation.set(null);
+    this.saveConfirmationFading.set(false);
+  }
+
+  private clearSaveConfirmationTimers(): void {
+    if (this.saveConfirmationTimer) clearTimeout(this.saveConfirmationTimer);
+    if (this.saveConfirmationDismissTimer) clearTimeout(this.saveConfirmationDismissTimer);
+    this.saveConfirmationTimer = null;
+    this.saveConfirmationDismissTimer = null;
   }
 
   async confirmDelete(): Promise<void> {
