@@ -79,6 +79,38 @@
           </section>
         }
 
+        @if (saveConfirmation(); as confirmation) {
+          <section class="movie-panel-enter mt-6 flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+            [class.border-green-300]="confirmation.action === 'created'"
+            [class.bg-green-50]="confirmation.action === 'created'"
+            [class.dark:border-green-900]="confirmation.action === 'created'"
+            [class.dark:bg-green-950]="confirmation.action === 'created'"
+            [class.border-blue-300]="confirmation.action === 'updated'"
+            [class.bg-blue-50]="confirmation.action === 'updated'"
+            [class.dark:border-blue-900]="confirmation.action === 'updated'"
+            [class.dark:bg-blue-950]="confirmation.action === 'updated'"
+            aria-live="polite">
+            <div>
+              <h2 class="text-lg font-semibold"
+                [class.text-green-950]="confirmation.action === 'created'"
+                [class.dark:text-green-100]="confirmation.action === 'created'"
+                [class.text-blue-950]="confirmation.action === 'updated'"
+                [class.dark:text-blue-100]="confirmation.action === 'updated'">
+                {{ confirmation.action === 'created' ? 'Movie added' : 'Movie updated' }}: “{{ confirmation.name }}”
+              </h2>
+              <p class="mt-1 text-base"
+                [class.text-green-900]="confirmation.action === 'created'"
+                [class.dark:text-green-200]="confirmation.action === 'created'"
+                [class.text-blue-900]="confirmation.action === 'updated'"
+                [class.dark:text-blue-200]="confirmation.action === 'updated'">
+                {{ confirmation.releaseYear }} · {{ confirmation.rating === null ? 'Unrated' : confirmation.rating + ' / 10' }}
+              </p>
+            </div>
+            <button class="min-h-11 cursor-pointer self-start rounded-md border border-stone-300 px-4 text-base font-medium dark:border-neutral-700 sm:self-auto"
+              type="button" (click)="closeSaveConfirmation()">Dismiss</button>
+          </section>
+        }
+
         <section class="mt-9" aria-label="Movie collection">
           <div class="flex flex-col gap-4 border-b border-stone-300 pb-5 dark:border-neutral-700">
             <div>
@@ -250,28 +282,4 @@
       </section>
     }
   </main>
-  @if (saveConfirmation(); as confirmation) {
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-5" (keydown.escape)="closeSaveConfirmation()">
-      <section class="movie-panel-enter w-full max-w-md rounded-lg border border-stone-200 bg-white p-6 shadow-xl dark:border-neutral-700 dark:bg-neutral-900 sm:p-8"
-        role="dialog" aria-modal="true" aria-labelledby="save-confirmation-heading" tabindex="-1">
-        <h2 id="save-confirmation-heading" class="text-2xl font-semibold">{{ confirmation.action === 'created' ? 'Movie added' : 'Movie updated' }}</h2>
-        <p class="mt-2 break-words text-lg font-medium">{{ confirmation.name }}</p>
-        <div class="mt-5 flex items-center justify-between gap-4 border-t border-stone-200 pt-4 dark:border-neutral-700">
-          <span class="text-base text-stone-600 dark:text-neutral-300">Year</span>
-          <span class="text-base font-semibold">{{ confirmation.releaseYear }}</span>
-        </div>
-        <div class="mt-3 flex items-center justify-between gap-4">
-          <span class="text-base text-stone-600 dark:text-neutral-300">Rating</span>
-          <span class="inline-flex min-w-20 items-center justify-center rounded-md px-3 py-2 text-base font-semibold"
-            [style.background-color]="ratingColor(confirmation.rating)" [style.color]="ratingTextColor(confirmation.rating)">
-            {{ confirmation.rating === null ? 'Unrated' : confirmation.rating + ' / 10' }}
-          </span>
-        </div>
-        <div class="mt-6 flex justify-end">
-          <button class="min-h-12 cursor-pointer rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
-            type="button" (click)="closeSaveConfirmation()">Done</button>
-        </div>
-      </section>
-    </div>
-  }
 </div>

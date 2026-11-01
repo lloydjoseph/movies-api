@@ -61,7 +61,7 @@ describe('App', () => {
     expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('shows movie summaries after creating and editing a movie', async () => {
+  it('shows an inline green or blue movie summary after create or edit', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     fixture.detectChanges();
@@ -76,11 +76,12 @@ describe('App', () => {
     await app.saveMovie();
     fixture.detectChanges();
 
-    let dialog = rendered.querySelector<HTMLElement>('[role="dialog"]');
-    expect(dialog?.textContent).toContain('Movie added');
-    expect(dialog?.textContent).toContain('New movie');
-    expect(dialog?.textContent).toContain('2025');
-    expect(dialog?.textContent).toContain('Unrated');
+    let confirmation = rendered.querySelector<HTMLElement>('section[aria-live="polite"]');
+    expect(confirmation?.textContent).toContain('Movie added: “New movie”');
+    expect(confirmation?.textContent).toContain('2025 · Unrated');
+    expect(confirmation?.classList.contains('bg-green-50')).toBe(true);
+    expect(confirmation?.classList.contains('fixed')).toBe(false);
+    expect(rendered.querySelector('[aria-label="Movie collection"]')?.previousElementSibling).toBe(confirmation);
 
     app.closeSaveConfirmation();
     app.openEditForm({ id: 1, name: 'Arrival', releaseYear: 2016, rating: 9 });
@@ -90,15 +91,14 @@ describe('App', () => {
     await app.saveMovie();
     fixture.detectChanges();
 
-    dialog = rendered.querySelector<HTMLElement>('[role="dialog"]');
-    expect(dialog?.textContent).toContain('Movie updated');
-    expect(dialog?.textContent).toContain('Arrival Updated');
-    expect(dialog?.textContent).toContain('2017');
-    expect(dialog?.textContent).toContain('8 / 10');
+    confirmation = rendered.querySelector<HTMLElement>('section[aria-live="polite"]');
+    expect(confirmation?.textContent).toContain('Movie updated: “Arrival Updated”');
+    expect(confirmation?.textContent).toContain('2017 · 8 / 10');
+    expect(confirmation?.classList.contains('bg-blue-50')).toBe(true);
 
-    dialog?.querySelector<HTMLButtonElement>('button')?.click();
+    confirmation?.querySelector<HTMLButtonElement>('button')?.click();
     fixture.detectChanges();
-    expect(rendered.querySelector('[role="dialog"]')).toBeNull();
+    expect(rendered.querySelector('section[aria-live="polite"]')).toBeNull();
   });
 
   it('renders sort controls and defaults to rating descending', async () => {
