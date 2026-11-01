@@ -18,7 +18,8 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64]
     environment: production
     steps:
       - name: Check out source
@@ -70,48 +71,9 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Configure SSH
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
-        run: |
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
-          chmod 600 "$HOME/.ssh/id_ed25519"
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/known_hosts"
-
       - name: Deploy tested commit
-        env:
-          SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
-          SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
         run: |
-          ssh -i "$HOME/.ssh/id_ed25519" \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            "$SSH_USER@$SSH_HOST" "bash -s -- '$GITHUB_SHA'" <<'REMOTE'
-          set -euo pipefail
-          deploy_sha="$1"
-          cd /home/joseph/movies-api
-
-          if [ "$(git branch --show-current)" != "main" ]; then
-            echo "Server checkout must be on main."
-            exit 1
-          fi
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "Server checkout has local changes; refusing to deploy."
-            exit 1
-          fi
-
-          git fetch origin main
-          if [ "$(git rev-parse origin/main)" != "$deploy_sha" ]; then
-            echo "The selected commit is no longer the tip of origin/main; dispatch again."
-            exit 1
-          fi
-          git merge --ff-only origin/main
-
           compose=(docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml -p movies-production)
           "${compose[@]}" config --quiet
           "${compose[@]}" up -d --build
           "${compose[@]}" ps
-          REMOTE

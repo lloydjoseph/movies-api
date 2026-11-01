@@ -2,6 +2,17 @@
 
 Updated: 2026-10-30
 
+## Latest handoff (2026-10-31)
+
+- The user is setting up one-click manual production deployment via GitHub Actions. Commit `41eff9f` adds `.github/workflows/deploy-production.yml` and documents the required GitHub `production` environment secrets. Backend tests, frontend tests (8), and frontend build passed when the workflow was added.
+- The hosted-runner deployment failed because GitHub cannot reach the server over SSH (port 22 connection timed out). Do not recommend exposing SSH publicly as the quick fix. User was advised to use a self-hosted GitHub Actions runner on the server.
+- Next: have the user register a Linux x64 self-hosted runner at **Repository → Settings → Actions → Runners → New self-hosted runner**, following the commands GitHub displays directly on the server. Keep its temporary registration token on the server. Install/run the service as the deployment user (likely `joseph`, not root); ensure it has Docker/Compose access. Restrict runner access to this private repository and trusted deployment workflow/branch.
+- Then update the workflow: run on the self-hosted runner (with matching labels) instead of `ubuntu-latest`; keep the `main` branch gate, manual trigger, production environment/backup confirmation, tests, and concurrency guard. Remove SSH setup/secrets and deploy directly from the checked-out workflow workspace on the server using `/etc/movies-api/production.env`, `docker-compose.production.yml`, and Compose project `movies-production`. `actions/checkout` provides the selected commit in the runner workspace, so do not fetch/merge a separate server checkout as the current SSH workflow does.
+- The actual production Compose stack is named `movies-production` and currently runs frontend/backend/Postgres; the gateway binds `127.0.0.1:8188`. Preserve the existing Postgres volume and do not use `down -v`. Workflow must continue requiring a current backup before the user confirms deployment.
+- After switching to the self-hosted runner and verifying a successful deployment, remove the now-unused `PRODUCTION_SSH_*` GitHub secrets and the temporary SSH deployment key if the user agrees. Never ask them to paste secrets or tokens.
+- Recent relevant commits: `41984d6` adds the orange Lucide clapperboard favicon; `2210a70` removes unrelated IDE files inadvertently included in that commit; `41eff9f` adds the first GitHub deployment workflow. Check whether these commits are pushed before proceeding.
+- The local worktree has unrelated IntelliJ modifications/untracked files and `backend/.m2/`; do not commit or clean them. Check `git status` before editing or committing.
+
 ## Latest handoff (2026-10-30)
 
 - The user is handing work over to Gemini. Read `PROJECT_CONTEXT.md` and this file first. They work from Ubuntu/WSL and use the command line.

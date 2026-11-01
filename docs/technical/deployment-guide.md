@@ -1,16 +1,15 @@
 # Manual deployment guide
 
-Production deployment can be started from the GitHub Actions **Deploy production** workflow. Before dispatching, create and verify a current database backup. The workflow tests the selected commit on `main`, requires confirmation of that backup, then connects to the server over SSH and rebuilds the production Compose services.
+Production deployment can be started from the GitHub Actions **Deploy production** workflow. Before dispatching, create and verify a current database backup. The workflow checks out and tests the selected commit on `main`, requires confirmation of that backup, then uses a self-hosted runner on the server to rebuild the production Compose services.
 
-**Status:** Release procedure for the owner's self-hosted server. The source repository is private on GitHub and the server checkout path is `/home/joseph/movies-api`. The production Compose file is `docker-compose.production.yml`; host Nginx will route the apex domain to the frontend gateway bound at `127.0.0.1:8188`. NPM, its media network, and existing Jellyfin routes stay unchanged. The production environment path is `/etc/movies-api/production.env`; choose and verify a protected database backup location before migration/cutover.
+**Status:** Release procedure for the owner's self-hosted server. The source repository is private on GitHub. The production Compose file is `docker-compose.production.yml`, using the `movies-production` project; host Nginx routes the apex domain to the frontend gateway bound at `127.0.0.1:8188`. NPM, its media network, and existing Jellyfin routes stay unchanged. The production environment path is `/etc/movies-api/production.env`; choose and verify a protected database backup location before migration/cutover.
 
-Deployments are expected only every few months. Before using the workflow, review the production Compose configuration, establish its GitHub environment secrets, prepare the server SSH access described below, and rehearse database restore.
+Deployments are expected only every few months. Before using the workflow, review the production Compose configuration, register and secure the self-hosted runner described below, and rehearse database restore.
 
 ## One-time setup needed before the first release
 
-- Clone this repository to `/home/joseph/movies-api` on the server.
-- Configure a repository-scoped read-only GitHub deploy key on the server before cloning. Keep the private key outside the repository with restrictive file permissions; add only the public key to the GitHub repository's deploy keys with read-only access. (Chosen approach; setup remains to be done.)
-- Create a dedicated SSH key for GitHub Actions and authorize its public key for the deployment user on the server. In the repository's **Settings → Environments**, create an environment named `production` and add these environment secrets: `PRODUCTION_SSH_HOST`, `PRODUCTION_SSH_USER`, `PRODUCTION_SSH_PRIVATE_KEY`, and `PRODUCTION_SSH_KNOWN_HOSTS`. Store a verified host-key entry in `PRODUCTION_SSH_KNOWN_HOSTS`; do not disable SSH host-key checking. The deployment user must be able to run Git and Docker Compose, and the server checkout must remain clean on branch `main`.
+- In the repository's **Settings → Actions → Runners**, add a Linux x64 self-hosted runner and follow GitHub's displayed setup instructions directly on the server. Keep the temporary registration token on the server. Install the runner as a service for the deployment user (not root), restrict it to this private repository, and ensure the user can access Docker and `/etc/movies-api/production.env`. Use the default `self-hosted`, `linux`, and `x64` labels expected by the workflow.
+- In the repository's **Settings → Environments**, create or retain the `production` environment and configure any required deployment approval. The workflow uses the checked-out commit in the runner workspace; it does not fetch or update a separate server checkout.
 - The `joseph` shell account reported that it is not in the sudoers file. The owner confirmed separate root/admin access; run the `/etc`, Nginx, and Certbot setup commands from that authorized administrative session.
 - The server already has host Nginx on public ports 80/443. Keep it and its `ask.jlloyd.fr` and `watch.jlloyd.fr` virtual hosts unchanged; do not alter router forwards or NPM.
 - DNS for `jlloyd.fr` points to the server's router address. Obtain a separate Let's Encrypt certificate for the apex; the existing certificates cover only `ask.jlloyd.fr` and `watch.jlloyd.fr`.
@@ -39,26 +38,13 @@ Deployments are expected only every few months. Before using the workflow, revie
 3. Record the commit or release tag that will be deployed.
 4. Confirm that the server has enough free disk space for the application images and a database backup.
 
-### 2. Connect and inspect the server checkout
-
-On the server, go to the repository clone and confirm it is on the intended branch with no unexpected local changes:
-
-```bash
-cd <server-repository-path>
-git status --short
-git branch --show-current
-git rev-parse --short HEAD
-```
-
-If there are uncommitted changes, stop and understand them before updating. Keep production environment files out of the repository checkout or ensure they are ignored and never overwritten by Git.
-
-### 3. Back up the database
+### 2. Back up the database
 
 Before a release that can affect data or schema, take a PostgreSQL dump. This command is a template; replace the server environment-file path and protected backup path:
 
 ```bash
 umask 077
-docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml \
+docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml -p movies-production \
   exec -T postgres \
   sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' \
   > <protected-backup-directory>/movies-<date-and-time>.sql
@@ -66,25 +52,12 @@ docker compose --env-file /etc/movies-api/production.env -f docker-compose.produ
 
 Check that the dump exists and is non-empty. Keep a copy outside the server if the catalog is important. A backup is useful only if it can be restored; document and periodically rehearse restoration separately.
 
-### 4. Update the checkout
-
-Save the currently deployed commit, then fast-forward to the reviewed release. Replace `<production-branch>` with the agreed branch name:
-
-```bash
-previous_commit=$(git rev-parse HEAD)
-git fetch --tags origin
-git pull --ff-only origin <production-branch>
-git log --oneline "$previous_commit"..HEAD
-```
-
-Review the listed changes. If they are not the intended release, stop before applying the Compose update.
-
-### 5. Validate configuration and deploy
+### 3. Validate configuration and deploy
 
 From the repository root, validate the production Compose configuration. Keep rendered configuration output private because it may contain expanded values:
 
 ```bash
-docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml config --quiet
+docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml -p movies-production config --quiet
 ```
 
 Confirm that the frontend publishes only `127.0.0.1:8188->8080`; do not publish the backend or database ports.
@@ -92,18 +65,18 @@ Confirm that the frontend publishes only `127.0.0.1:8188->8080`; do not publish 
 Then build and start/update the application:
 
 ```bash
-docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml up -d --build
+docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml -p movies-production up -d --build
 ```
 
 Do not use `docker compose down -v` as a routine update command; removing volumes can delete the database. Do not expose PostgreSQL on a public host port.
 
-### 6. Check the deployment
+### 4. Check the deployment
 
 Use the production Compose services:
 
 ```bash
-docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml ps
-docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml logs --tail=100 frontend backend postgres
+docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml -p movies-production ps
+docker compose --env-file /etc/movies-api/production.env -f docker-compose.production.yml -p movies-production logs --tail=100 frontend backend postgres
 ```
 
 Install the final host Nginx config from `deploy/nginx-movies.conf` only after the apex certificate exists and the Compose frontend is responding on `127.0.0.1:8188`. Validate and reload Nginx:
@@ -126,7 +99,7 @@ Then check the application through its public domain:
 
 Avoid testing permanent deletion on real catalog data; use a disposable test entry and remove it only after confirming the prompt.
 
-### 7. If the release fails
+### 5. If the release fails
 
 - Capture the relevant Compose logs and note the deployed commit before making further changes.
 - If the failure is limited to application code and the database schema remains compatible, restore the previous commit and rebuild/recreate the application services.
