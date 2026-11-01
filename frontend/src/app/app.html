@@ -250,4 +250,28 @@
       </section>
     }
   </main>
+  @if (saveConfirmation(); as confirmation) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-5" (keydown.escape)="closeSaveConfirmation()">
+      <section class="movie-panel-enter w-full max-w-md rounded-lg border border-stone-200 bg-white p-6 shadow-xl dark:border-neutral-700 dark:bg-neutral-900 sm:p-8"
+        role="dialog" aria-modal="true" aria-labelledby="save-confirmation-heading" tabindex="-1">
+        <h2 id="save-confirmation-heading" class="text-2xl font-semibold">{{ confirmation.action === 'created' ? 'Movie added' : 'Movie updated' }}</h2>
+        <p class="mt-2 break-words text-lg font-medium">{{ confirmation.name }}</p>
+        <div class="mt-5 flex items-center justify-between gap-4 border-t border-stone-200 pt-4 dark:border-neutral-700">
+          <span class="text-base text-stone-600 dark:text-neutral-300">Year</span>
+          <span class="text-base font-semibold">{{ confirmation.releaseYear }}</span>
+        </div>
+        <div class="mt-3 flex items-center justify-between gap-4">
+          <span class="text-base text-stone-600 dark:text-neutral-300">Rating</span>
+          <span class="inline-flex min-w-20 items-center justify-center rounded-md px-3 py-2 text-base font-semibold"
+            [style.background-color]="ratingColor(confirmation.rating)" [style.color]="ratingTextColor(confirmation.rating)">
+            {{ confirmation.rating === null ? 'Unrated' : confirmation.rating + ' / 10' }}
+          </span>
+        </div>
+        <div class="mt-6 flex justify-end">
+          <button class="min-h-12 cursor-pointer rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+            type="button" (click)="closeSaveConfirmation()">Done</button>
+        </div>
+      </section>
+    </div>
+  }
 </div>

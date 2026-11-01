@@ -4,6 +4,12 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { CatalogQuery, Movie, MovieApiService, MovieInput, MovieSort, SignedInUser } from './movie-api.service';
 
 type Theme = 'light' | 'dark';
+type SaveConfirmation = {
+  action: 'created' | 'updated';
+  name: string;
+  releaseYear: number;
+  rating: number | null;
+};
 
 @Component({
   selector: 'app-root',
@@ -29,6 +35,7 @@ export class App {
   readonly includeUnrated = signal<boolean>(false);
   readonly editorOpen = signal(false);
   readonly editingMovie = signal<Movie | null>(null);
+  readonly saveConfirmation = signal<SaveConfirmation | null>(null);
   readonly deletingMovie = signal<Movie | null>(null);
   readonly activeMovieActionsId = signal<number | null>(null);
   readonly theme = signal<Theme>(this.readThemePreference());
@@ -293,12 +300,22 @@ export class App {
       else await this.api.createMovie(movie);
 
       this.editorOpen.set(false);
+      this.saveConfirmation.set({
+        action: current ? 'updated' : 'created',
+        name: movie.name,
+        releaseYear: movie.releaseYear,
+        rating: movie.rating,
+      });
       await this.reloadMovies();
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Could not save the movie. Check the details and try again.'));
     } finally {
       this.saving.set(false);
     }
+  }
+
+  closeSaveConfirmation(): void {
+    this.saveConfirmation.set(null);
   }
 
   async confirmDelete(): Promise<void> {

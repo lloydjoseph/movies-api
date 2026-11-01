@@ -61,6 +61,46 @@ describe('App', () => {
     expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.getAttribute('aria-pressed')).toBe('false');
   });
 
+  it('shows movie summaries after creating and editing a movie', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const app = fixture.componentInstance;
+    const rendered = fixture.nativeElement as HTMLElement;
+
+    app.openCreateForm();
+    app.title = 'New movie';
+    app.releaseYear = 2025;
+    app.rating = null;
+    await app.saveMovie();
+    fixture.detectChanges();
+
+    let dialog = rendered.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog?.textContent).toContain('Movie added');
+    expect(dialog?.textContent).toContain('New movie');
+    expect(dialog?.textContent).toContain('2025');
+    expect(dialog?.textContent).toContain('Unrated');
+
+    app.closeSaveConfirmation();
+    app.openEditForm({ id: 1, name: 'Arrival', releaseYear: 2016, rating: 9 });
+    app.title = 'Arrival Updated';
+    app.releaseYear = 2017;
+    app.rating = 8;
+    await app.saveMovie();
+    fixture.detectChanges();
+
+    dialog = rendered.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog?.textContent).toContain('Movie updated');
+    expect(dialog?.textContent).toContain('Arrival Updated');
+    expect(dialog?.textContent).toContain('2017');
+    expect(dialog?.textContent).toContain('8 / 10');
+
+    dialog?.querySelector<HTMLButtonElement>('button')?.click();
+    fixture.detectChanges();
+    expect(rendered.querySelector('[role="dialog"]')).toBeNull();
+  });
+
   it('renders sort controls and defaults to rating descending', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
