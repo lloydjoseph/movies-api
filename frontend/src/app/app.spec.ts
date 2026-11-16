@@ -50,6 +50,18 @@ describe('App', () => {
     expect(document.title).toBe('Collection | Joseph’s Movies');
   });
 
+  it('reports a rejected catalog request as a loading error', async () => {
+    const listMovies = vi.spyOn(api, 'listMovies')
+      .mockRejectedValueOnce(new HttpErrorResponse({ status: 400 }));
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Could not load your movies. Please try again.');
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('The movie details were rejected.');
+    listMovies.mockRestore();
+  });
+
   it('opens the movie add form with a watchlist title and removes it after saving', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
@@ -117,7 +129,8 @@ describe('App', () => {
     expect(api.updateWatchlistItem).toHaveBeenCalledWith(
       7, 'There Will Be Blood', 'Watch on a big screen', 'HIGH');
     expect(rendered.textContent).toContain('Watch on a big screen');
-    expect(rendered.textContent).toContain('↑High');
+    expect(rendered.textContent).toContain('High');
+    expect(rendered.querySelector('[aria-label="Priority: High"] svg[aria-hidden="true"]')).not.toBeNull();
   });
 
   it('confirms before removing a watchlist item', async () => {
@@ -263,18 +276,31 @@ describe('App', () => {
 
     const app = fixture.componentInstance;
     expect(app.sortBy()).toBe('rating_desc');
-    expect(app.sortArrow('rating')).toBe('↓');
-    expect(app.sortArrow('year')).toBe('↕');
-    expect(app.sortArrow('title')).toBe('↕');
+    expect(app.sortDirection('rating')).toBe('descending');
+    expect(app.sortDirection('year')).toBe('unsorted');
+    expect(app.sortDirection('title')).toBe('unsorted');
 
     app.toggleSort('rating');
     expect(app.sortBy()).toBe('rating_asc');
-    expect(app.sortArrow('rating')).toBe('↑');
+    expect(app.sortDirection('rating')).toBe('ascending');
+
+    app.toggleSort('rating');
+    expect(app.sortBy()).toBe('none');
+    expect(app.sortDirection('rating')).toBe('unsorted');
+
+    app.toggleSort('rating');
+    expect(app.sortBy()).toBe('rating_desc');
+    expect(app.sortDirection('rating')).toBe('descending');
 
     app.toggleSort('year');
     expect(app.sortBy()).toBe('year_desc');
-    expect(app.sortArrow('year')).toBe('↓');
-    expect(app.sortArrow('rating')).toBe('↕');
+    expect(app.sortDirection('year')).toBe('descending');
+    expect(app.sortDirection('rating')).toBe('unsorted');
+
+    app.toggleSort('year');
+    expect(app.sortBy()).toBe('year_asc');
+    app.toggleSort('year');
+    expect(app.sortBy()).toBe('none');
   });
 
   it('allows toggling rating number filters', async () => {

@@ -39,7 +39,8 @@ export type MovieSort =
   | 'year_desc'
   | 'year_asc'
   | 'title_asc'
-  | 'title_desc';
+  | 'title_desc'
+  | 'none';
 
 export interface CatalogQuery {
   page: number;

@@ -215,6 +215,15 @@ class MovieApiIntegrationTests {
                 .andExpect(jsonPath("$.totalItems").value(3))
                 .andExpect(jsonPath("$.hasNext").value(true));
 
+        // No selected sort uses stable ID order
+        mockMvc.perform(get("/api/movies")
+                        .param("sort", "none")
+                        .with(oidcUser("owner-sub", "owner@example.com")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].name").value("Older rated"))
+                .andExpect(jsonPath("$.items[1].name").value("Latest rated"))
+                .andExpect(jsonPath("$.items[2].name").value("Newest unrated"));
+
         // Year descending sort
         mockMvc.perform(get("/api/movies")
                         .param("sort", "year_desc")

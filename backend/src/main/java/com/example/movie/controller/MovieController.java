@@ -92,7 +92,7 @@ public class MovieController {
     private void validateSort(String sort) {
         if (sort == null) return;
         boolean valid = switch (sort) {
-            case "rating_desc", "rating_asc", "year_desc", "year_asc", "title_asc", "title_desc" -> true;
+            case "rating_desc", "rating_asc", "year_desc", "year_asc", "title_asc", "title_desc", "none" -> true;
             default -> false;
         };
         if (!valid) {

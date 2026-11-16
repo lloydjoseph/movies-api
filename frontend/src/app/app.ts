@@ -2,9 +2,20 @@ import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Title } from '@angular/platform-browser';
+import {
+  LucideArrowDown,
+  LucideArrowUp,
+  LucideArrowUpDown,
+  LucideMinus,
+  LucideMoon,
+  LucidePlus,
+  LucideSearch,
+  LucideSun,
+} from '@lucide/angular';
 import { CatalogQuery, Movie, MovieApiService, MovieInput, MovieSort, SignedInUser, WatchlistItem, WatchlistPriority } from './movie-api.service';
 
 type Theme = 'light' | 'dark';
+type SortDirection = 'ascending' | 'descending' | 'unsorted';
 type SaveConfirmation = {
   action: 'created' | 'updated';
   name: string;
@@ -14,7 +25,17 @@ type SaveConfirmation = {
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule],
+  imports: [
+    FormsModule,
+    LucideArrowDown,
+    LucideArrowUp,
+    LucideArrowUpDown,
+    LucideMinus,
+    LucideMoon,
+    LucidePlus,
+    LucideSearch,
+    LucideSun,
+  ],
   templateUrl: './app.html',
 })
 export class App implements OnDestroy {
@@ -225,12 +246,6 @@ export class App implements OnDestroy {
     }
   }
 
-  priorityIcon(priority: WatchlistPriority): string {
-    if (priority === 'HIGH') return '↑';
-    if (priority === 'LOW') return '↓';
-    return '−';
-  }
-
   priorityLabel(priority: WatchlistPriority): string {
     return priority.charAt(0) + priority.slice(1).toLowerCase();
   }
@@ -319,34 +334,40 @@ export class App implements OnDestroy {
     void this.loadMovies(true);
   }
 
-  sortArrow(field: 'rating' | 'year' | 'title'): string {
+  sortDirection(field: 'rating' | 'year' | 'title'): SortDirection {
     const current = this.sortBy();
     if (field === 'rating') {
-      if (current === 'rating_desc') return '↓';
-      if (current === 'rating_asc') return '↑';
-      return '↕';
+      if (current === 'rating_desc') return 'descending';
+      if (current === 'rating_asc') return 'ascending';
+      return 'unsorted';
     }
     if (field === 'year') {
-      if (current === 'year_desc') return '↓';
-      if (current === 'year_asc') return '↑';
-      return '↕';
+      if (current === 'year_desc') return 'descending';
+      if (current === 'year_asc') return 'ascending';
+      return 'unsorted';
     }
     if (field === 'title') {
-      if (current === 'title_asc') return '↑';
-      if (current === 'title_desc') return '↓';
-      return '↕';
+      if (current === 'title_asc') return 'ascending';
+      if (current === 'title_desc') return 'descending';
+      return 'unsorted';
     }
-    return '↕';
+    return 'unsorted';
   }
 
   toggleSort(field: 'rating' | 'year' | 'title'): void {
     const current = this.sortBy();
     if (field === 'rating') {
-      this.setSort(current === 'rating_desc' ? 'rating_asc' : 'rating_desc');
+      if (current === 'rating_desc') this.setSort('rating_asc');
+      else if (current === 'rating_asc') this.setSort('none');
+      else this.setSort('rating_desc');
     } else if (field === 'year') {
-      this.setSort(current === 'year_desc' ? 'year_asc' : 'year_desc');
+      if (current === 'year_desc') this.setSort('year_asc');
+      else if (current === 'year_asc') this.setSort('none');
+      else this.setSort('year_desc');
     } else if (field === 'title') {
-      this.setSort(current === 'title_asc' ? 'title_desc' : 'title_asc');
+      if (current === 'title_asc') this.setSort('title_desc');
+      else if (current === 'title_desc') this.setSort('none');
+      else this.setSort('title_asc');
     }
   }
 
@@ -463,7 +484,11 @@ export class App implements OnDestroy {
         this.watchlist.update(items => items.filter(item => item.id !== watchlistItemId));
       }
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Could not save the movie. Check the details and try again.'));
+      this.error.set(this.errorMessage(
+        error,
+        'Could not save the movie. Check the details and try again.',
+        'The movie details were rejected. Check the title, year, and rating.',
+      ));
     } finally {
       this.saving.set(false);
     }
@@ -584,13 +609,13 @@ export class App implements OnDestroy {
     this.error.set('Could not reach the movie service. Check that the backend is running, then retry.');
   }
 
-  private errorMessage(error: unknown, fallback: string): string {
+  private errorMessage(error: unknown, fallback: string, badRequestMessage = fallback): string {
     if (!(error instanceof HttpErrorResponse)) return fallback;
     if (error.status === 401) {
       this.user.set(null);
       return 'Your session expired. Sign in again to continue.';
     }
-    if (error.status === 400) return 'The movie details were rejected. Check the title, year, and rating.';
+    if (error.status === 400) return badRequestMessage;
     if (error.status === 409) return 'That title is already in your collection or watchlist.';
     if (error.status === 403) return 'This action was denied. Reload the page and try again.';
     return fallback;

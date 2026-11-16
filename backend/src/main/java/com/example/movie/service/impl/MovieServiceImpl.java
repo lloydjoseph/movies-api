@@ -103,6 +103,7 @@ public class MovieServiceImpl implements MovieService {
                     Sort.Order.desc("releaseYear"),
                     Sort.Order.asc("id")
             );
+            case "none" -> Sort.by(Sort.Order.asc("id"));
             default -> Sort.by(
                     Sort.Order.desc("rating").nullsLast(),
                     Sort.Order.desc("releaseYear"),
