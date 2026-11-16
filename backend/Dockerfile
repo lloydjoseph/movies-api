@@ -4,7 +4,8 @@ COPY pom.xml mvnw ./
 COPY .mvn .mvn
 RUN chmod +x ./mvnw
 COPY src src
-RUN ./mvnw -B -DskipTests package
+# Avoid the intermittent C2 compiler crash seen with the Temurin 21 build image.
+RUN MAVEN_OPTS="-XX:TieredStopAtLevel=1" ./mvnw -B -DskipTests package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
