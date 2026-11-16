@@ -56,15 +56,15 @@ The owner's Debian host Nginx listens on public ports 80/443 and already serves 
 - `MovieService` and `MovieServiceImpl` implement account-scoped paginated catalog operations.
 - `MovieRepository` extends `JpaRepository<Movie, Integer>` and provides account-scoped title and rating filters.
 - `MovieMapper` maps the JPA entity to `MovieDto` and trims movie names at write time.
-- Optional title search accepts 3–100 characters; page size is capped at 100. Ordering is configurable via `sort` (`rating_desc`, `rating_asc`, `year_desc`, `year_asc`, `title_asc`, `title_desc`), defaulting to rating descending (nulls last), then release year descending, then name and ID ascending.
+- Optional title search accepts 3–100 characters; page size is capped at 100. Ordering is configurable via `sort` (`rating_desc`, `rating_asc`, `year_desc`, `year_asc`, `title_asc`, `title_desc`, `none`), defaulting to rating descending (nulls last), then release year descending, then name and ID ascending. `none` uses stable ID-ascending order.
 - Spring Security uses Google OIDC, a verified-email allowlist, session authentication, and CSRF protection. See the authentication boundary above.
 
 ## Frontend (current implementation)
 
-- Angular 22, TypeScript 6, standalone application configuration. The root component implements a responsive sign-in view and account-scoped movie catalog with create, edit, confirmed delete, title search, multi-select rating filters, and pagination.
+- Angular 22, TypeScript 6, standalone application configuration. The root component implements a responsive sign-in view and account-scoped movie catalog with create, edit, undoable delete, title search, multi-select rating filters, pagination, and CSV export. Collection view preferences are saved per account in session storage.
 - Startup checks `/api/auth/me`; writes fetch a CSRF token from `/api/auth/csrf` and send the backend-provided header. Google OAuth begins at `/oauth2/authorization/google`.
-- Catalog search, rating filters, ordering, and pagination are handled by the account-scoped `GET /api/movies` endpoint; the client requests at most 50 rows per page.
-- Catalog rows show title, year, and rating; selecting a row reveals Edit and Remove actions over it on both mobile and desktop. Edit and delete confirmation replace the selected row inline. The row animates its height to fit the panel and back when dismissed.
+- Catalog search, rating filters, tri-state column sorting (ascending, descending, or none), and pagination are handled by the account-scoped `GET /api/movies` endpoint; the collection view requests at most 50 rows per page and CSV export requests 100.
+- Catalog rows show title, year, and rating; selecting a row reveals Edit and Remove actions over it on both mobile and desktop. Edit and delete confirmation replace the selected row inline. Confirmed deletes are removed optimistically and can be undone for five seconds before they are sent to the backend. The row animates its height to fit the panel and back when dismissed.
 - Add and edit forms use a two-column layout for Title and Year, followed by a full-width rating control. The edit form uses a segmented set of score buttons; clicking the selected score again clears the rating. The add form currently uses a dropdown. Invalid edit submissions show title/year validation messages below their respective inputs.
 - Active title or rating filters that return no results display “No matching movies.” Subtle panel and overlay animations respect `prefers-reduced-motion`.
 - Theme defaults to `prefers-color-scheme`; manual override is stored in local storage on that browser. Cross-device account preference persistence is not implemented.
@@ -95,7 +95,7 @@ The owner's Debian host Nginx listens on public ports 80/443 and already serves 
 
 | Method and path | Behavior |
 |---|---|
-| `GET /api/movies?page=0&size=50` | Requires an authenticated, allowlisted session; returns a stable, account-scoped page with at most 100 rows. Default sort is rating descending (`nulls last`), then release year descending, name and ID ascending. Supports `sort=rating_desc|rating_asc|year_desc|year_asc|title_asc|title_desc`. |
+| `GET /api/movies?page=0&size=50` | Requires an authenticated, allowlisted session; returns a stable, account-scoped page with at most 100 rows. Default sort is rating descending (`nulls last`), then release year descending, name and ID ascending. Supports `sort=rating_desc|rating_asc|year_desc|year_asc|title_asc|title_desc|none`; `none` uses ID-ascending order. |
 | `GET /api/movies?q={term}&ratings={csv}&includeUnrated={bool}` | Optional filters: title `q` (3–100 chars), multi-select `ratings` (e.g. `8,9,10`), `includeUnrated=true`, or legacy `ratingMode=all\|unrated\|exact\|range`. Filters combine with AND. Response contains `items`, `page`, `size`, `totalItems`, `totalPages`, and `hasNext`. |
 | `POST /api/movies` | Requires authentication and CSRF. Creates `{name, releaseYear, rating}` under the authenticated account; returns HTTP 201 and the created DTO. |
 | `PUT /api/movies/{id}` | Requires authentication and CSRF. Replaces the supplied movie fields only when the ID belongs to the authenticated account; returns HTTP 200 or 404. |
