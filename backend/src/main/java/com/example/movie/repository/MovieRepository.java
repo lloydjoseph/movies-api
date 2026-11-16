@@ -39,4 +39,15 @@ public interface MovieRepository extends JpaRepository<Movie, Integer> {
 
     Optional<Movie> findByIdAndAccount_Id(Integer id, Long accountId);
 
+    @Query("""
+            select count(m) > 0 from Movie m
+            where m.account.id = :accountId
+              and (:excludeMovieId is null or m.id <> :excludeMovieId)
+              and lower(trim(m.name)) = lower(:name)
+            """)
+    boolean existsByAccountAndNormalizedNameExcludingId(
+            @Param("accountId") Long accountId,
+            @Param("name") String name,
+            @Param("excludeMovieId") Integer excludeMovieId);
+
 }

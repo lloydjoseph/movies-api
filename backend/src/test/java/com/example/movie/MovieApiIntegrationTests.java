@@ -2,6 +2,7 @@ package com.example.movie;
 
 import com.example.movie.repository.AccountRepository;
 import com.example.movie.repository.MovieRepository;
+import com.example.movie.repository.WatchlistRepository;
 import com.example.movie.entity.Account;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +49,9 @@ class MovieApiIntegrationTests {
     private MovieRepository movieRepository;
 
     @Autowired
+    private WatchlistRepository watchlistRepository;
+
+    @Autowired
     private AccountRepository accountRepository;
 
     @Autowired
@@ -65,6 +69,7 @@ class MovieApiIntegrationTests {
 
     @BeforeEach
     void clearDatabase() {
+        watchlistRepository.deleteAllInBatch();
         movieRepository.deleteAllInBatch();
         accountRepository.deleteAllInBatch();
     }
@@ -295,6 +300,166 @@ class MovieApiIntegrationTests {
                         .contentType(APPLICATION_JSON)
                         .content(movieJson("Missing CSRF", 2020, null)))
                 .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/watchlist"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void managesAccountScopedWatchlistItems() throws Exception {
+        String created = mockMvc.perform(post("/api/watchlist")
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"  There Will Be Blood  \",\"notes\":\"  Recommended by Alex  \"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("There Will Be Blood"))
+                .andExpect(jsonPath("$.notes").value("Recommended by Alex"))
+                .andExpect(jsonPath("$.priority").value("MEDIUM"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long id = ((Number) JsonPath.read(created, "$.id")).longValue();
+
+        mockMvc.perform(get("/api/watchlist").with(oidcUser("owner-sub", "owner@example.com")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].name").value("There Will Be Blood"))
+                .andExpect(jsonPath("$[0].notes").value("Recommended by Alex"));
+
+        mockMvc.perform(get("/api/watchlist").with(oidcUser("other-sub", "second@example.com")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        mockMvc.perform(post("/api/watchlist")
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"there will be blood\"}"))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(delete("/api/watchlist/{id}", id)
+                        .with(oidcUser("other-sub", "second@example.com"))
+                        .with(csrf()))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(delete("/api/watchlist/{id}", id)
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(put("/api/watchlist/{id}", id)
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"Updated title\",\"notes\":\"New note\"}"))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(post("/api/watchlist")
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\" \"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updatesWatchlistTitleAndNotesOnlyForTheOwner() throws Exception {
+        String created = mockMvc.perform(post("/api/watchlist")
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"Original title\",\"notes\":\"Old note\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long id = ((Number) JsonPath.read(created, "$.id")).longValue();
+
+        mockMvc.perform(put("/api/watchlist/{id}", id)
+                        .with(oidcUser("other-sub", "second@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"Changed title\",\"notes\":\"Changed note\"}"))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(put("/api/watchlist/{id}", id)
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"Updated title\",\"notes\":\"A new note\",\"priority\":\"HIGH\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Updated title"))
+                .andExpect(jsonPath("$.notes").value("A new note"))
+                .andExpect(jsonPath("$.priority").value("HIGH"));
+
+        mockMvc.perform(put("/api/watchlist/{id}", id)
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"Updated title\",\"notes\":\"" + "x".repeat(501)
+                                + "\",\"priority\":\"LOW\"}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(put("/api/watchlist/{id}", id)
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"Updated title\",\"notes\":\"A new note\",\"priority\":\"URGENT\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void preventsCaseInsensitiveTitlesFromBeingAddedToBothLists() throws Exception {
+        createMovie("owner-sub", "owner@example.com", "Arrival", 2016, 9);
+
+        mockMvc.perform(post("/api/watchlist")
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"  arrival \"}"))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/watchlist")
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"There Will Be Blood\"}"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/movies")
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content(movieJson("  THERE WILL BE BLOOD ", 2007, null)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void transfersWatchlistItemToCollectionWhenMarkedSeen() throws Exception {
+        String item = mockMvc.perform(post("/api/watchlist")
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"There Will Be Blood\",\"notes\":\"Recommended by Alex\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long id = ((Number) JsonPath.read(item, "$.id")).longValue();
+
+        mockMvc.perform(post("/api/movies")
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"There Will Be Blood\",\"releaseYear\":2007,"
+                                + "\"rating\":null,\"watchlistItemId\":" + id + "}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("There Will Be Blood"));
+
+        mockMvc.perform(get("/api/watchlist").with(oidcUser("owner-sub", "owner@example.com")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 
     @Test
@@ -315,6 +480,18 @@ class MovieApiIntegrationTests {
                         + "AND conname='ck_movie_release_year_positive'",
                 Integer.class);
         assertThat(releaseYearConstraintCount).isEqualTo(1);
+
+        Integer watchlistIndexCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' "
+                        + "AND indexname='uk_watchlist_item_account_name_normalized'",
+                Integer.class);
+        assertThat(watchlistIndexCount).isEqualTo(1);
+
+        String priorityNullability = jdbcTemplate.queryForObject(
+                "SELECT is_nullable FROM information_schema.columns "
+                        + "WHERE table_schema='public' AND table_name='watchlist_item' AND column_name='priority'",
+                String.class);
+        assertThat(priorityNullability).isEqualTo("NO");
 
         String identity = jdbcTemplate.queryForObject(
                 "SELECT is_identity FROM information_schema.columns "

@@ -18,6 +18,9 @@ public record MovieRequest(
 
         @Min(1)
         @Max(10)
-        Integer rating
+        Integer rating,
+
+        @Positive
+        Long watchlistItemId
 ) {
 }

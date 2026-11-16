@@ -114,4 +114,52 @@
             <sql>ALTER TABLE movie DROP CONSTRAINT ck_movie_release_year_positive</sql>
         </rollback>
     </changeSet>
+
+    <changeSet id="008-create-watchlist-item" author="movies-api">
+        <createTable tableName="watchlist_item">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint
+                baseTableName="watchlist_item"
+                baseColumnNames="account_id"
+                referencedTableName="movie_account"
+                referencedColumnNames="id"
+                constraintName="fk_watchlist_item_account"/>
+        <addUniqueConstraint
+                tableName="watchlist_item"
+                columnNames="account_id, name"
+                constraintName="uk_watchlist_item_account_name"/>
+    </changeSet>
+
+    <changeSet id="009-normalize-watchlist-title-uniqueness" author="movies-api">
+        <dropUniqueConstraint
+                tableName="watchlist_item"
+                constraintName="uk_watchlist_item_account_name"/>
+        <sql>
+            CREATE UNIQUE INDEX uk_watchlist_item_account_name_normalized
+                ON watchlist_item (account_id, lower(btrim(name)))
+        </sql>
+    </changeSet>
+
+    <changeSet id="010-add-watchlist-notes" author="movies-api">
+        <addColumn tableName="watchlist_item">
+            <column name="notes" type="VARCHAR(500)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="011-add-watchlist-priority" author="movies-api">
+        <addColumn tableName="watchlist_item">
+            <column name="priority" type="VARCHAR(10)" defaultValue="MEDIUM">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>

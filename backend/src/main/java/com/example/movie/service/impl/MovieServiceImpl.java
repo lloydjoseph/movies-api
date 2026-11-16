@@ -5,8 +5,10 @@ import com.example.movie.dto.MoviePageDto;
 import com.example.movie.dto.MovieRequest;
 import com.example.movie.entity.Account;
 import com.example.movie.entity.Movie;
+import com.example.movie.entity.WatchlistItem;
 import com.example.movie.mapper.MovieMapper;
 import com.example.movie.repository.MovieRepository;
+import com.example.movie.repository.WatchlistRepository;
 import com.example.movie.service.MovieService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,6 +28,7 @@ import java.util.List;
 public class MovieServiceImpl implements MovieService {
 
     private final MovieRepository repository;
+    private final WatchlistRepository watchlistRepository;
     private final MovieMapper mapper;
 
     @Override
@@ -111,14 +114,29 @@ public class MovieServiceImpl implements MovieService {
 
     @Override
     public MovieDto create(MovieRequest request, Account account) {
+        WatchlistItem transferItem = null;
+        if (request.watchlistItemId() != null) {
+            transferItem = watchlistRepository.findByIdAndAccount_Id(
+                            request.watchlistItemId(), account.getId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Watchlist item not found"));
+            if (!transferItem.getName().trim().equalsIgnoreCase(request.name().trim())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Watchlist title does not match movie title");
+            }
+        }
+
+        ensureTitleIsAvailable(request.name(), account, null,
+                transferItem == null ? null : transferItem.getId());
         var movie = mapper.toEntity(request);
         movie.setAccount(account);
-        return mapper.toDto(repository.save(movie));
+        Movie saved = repository.save(movie);
+        if (transferItem != null) watchlistRepository.delete(transferItem);
+        return mapper.toDto(saved);
     }
 
     @Override
     public MovieDto update(Integer id, MovieRequest request, Account account) {
         var movie = findOwnedMovie(id, account);
+        ensureTitleIsAvailable(request.name(), account, movie.getId(), null);
         mapper.updateEntity(request, movie);
         return mapper.toDto(repository.save(movie));
     }
@@ -131,6 +149,17 @@ public class MovieServiceImpl implements MovieService {
     private Movie findOwnedMovie(Integer id, Account account) {
         return repository.findByIdAndAccount_Id(id, account.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Movie not found"));
+    }
+
+    private void ensureTitleIsAvailable(
+            String name, Account account, Integer excludeMovieId, Long excludeWatchlistItemId) {
+        String normalizedName = name.trim();
+        if (watchlistRepository.existsDuplicateNameExceptId(account.getId(), normalizedName, excludeWatchlistItemId)
+                || repository.existsByAccountAndNormalizedNameExcludingId(
+                account.getId(), normalizedName, excludeMovieId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Movie is already in your collection or watchlist");
+        }
     }
 
 }
