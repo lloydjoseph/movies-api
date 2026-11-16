@@ -1,10 +1,19 @@
 import { TestBed } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { MovieApiService } from './movie-api.service';
 import { App } from './app';
 
 describe('App', () => {
   const api = {
     currentUser: () => Promise.resolve({ email: 'joseph@example.com', name: 'Joseph Lloyd' }),
+    listWatchlist: () => Promise.resolve([{
+      id: 7, name: 'There Will Be Blood', notes: 'Recommended by Alex', priority: 'MEDIUM' as const,
+    }]),
+    addWatchlistItem: vi.fn((name: string, notes: string, priority: 'LOW' | 'MEDIUM' | 'HIGH') =>
+      Promise.resolve({ id: 8, name, notes: notes || null, priority })),
+    updateWatchlistItem: vi.fn((id: number, name: string, notes: string, priority: 'LOW' | 'MEDIUM' | 'HIGH') =>
+      Promise.resolve({ id, name, notes: notes || null, priority })),
+    deleteWatchlistItem: vi.fn(() => Promise.resolve()),
     listMovies: () => Promise.resolve({
       items: [{ id: 1, name: 'Arrival', releaseYear: 2016, rating: 9 }],
       page: 0,
@@ -13,7 +22,7 @@ describe('App', () => {
       totalPages: 1,
       hasNext: false,
     }),
-    createMovie: () => Promise.resolve({ id: 2, name: 'New movie', releaseYear: 2025, rating: null }),
+    createMovie: vi.fn(() => Promise.resolve({ id: 2, name: 'New movie', releaseYear: 2025, rating: null })),
     updateMovie: () => Promise.resolve({ id: 1, name: 'Arrival', releaseYear: 2016, rating: 9 }),
     deleteMovie: () => Promise.resolve(),
     logout: () => Promise.resolve(),
@@ -32,8 +41,123 @@ describe('App', () => {
     fixture.detectChanges();
 
     const rendered = fixture.nativeElement as HTMLElement;
-    expect(rendered.querySelector('h1')?.textContent).toContain('Movies');
+    expect(rendered.querySelector('h1')?.textContent).toContain('Collection');
     expect(rendered.textContent).toContain('Arrival');
+    expect(document.title).toBe('Collection | Joseph’s Movies');
+    fixture.componentInstance.selectTab('watchlist');
+    expect(document.title).toBe('Watchlist | Joseph’s Movies');
+    fixture.componentInstance.selectTab('movies');
+    expect(document.title).toBe('Collection | Joseph’s Movies');
+  });
+
+  it('opens the movie add form with a watchlist title and removes it after saving', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const app = fixture.componentInstance;
+    app.selectTab('watchlist');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('There Will Be Blood');
+    app.markWatchlistItemSeen({
+      id: 7, name: 'There Will Be Blood', notes: 'Recommended by Alex', priority: 'MEDIUM',
+    });
+    fixture.detectChanges();
+
+    expect(app.activeTab()).toBe('movies');
+    expect(app.editorOpen()).toBe(true);
+    expect(app.title).toBe('There Will Be Blood');
+
+    await app.saveMovie();
+    expect(api.createMovie).toHaveBeenCalledWith(
+      { name: 'There Will Be Blood', releaseYear: new Date().getFullYear(), rating: null }, 7);
+    expect(app.watchlist()).toHaveLength(0);
+  });
+
+  it('displays and edits watchlist notes', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const app = fixture.componentInstance;
+    app.selectTab('watchlist');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const rendered = fixture.nativeElement as HTMLElement;
+    expect(rendered.textContent).toContain('Recommended by Alex');
+    app.openWatchlistForm();
+    fixture.detectChanges();
+    const addPriorityButtons = rendered.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Priority"] button');
+    expect(addPriorityButtons).toHaveLength(3);
+    expect(addPriorityButtons[0].textContent).toContain('High');
+    expect(addPriorityButtons[1].getAttribute('aria-pressed')).toBe('true');
+    expect(addPriorityButtons[2].textContent).toContain('Low');
+    app.watchlistEditorOpen.set(false);
+    fixture.detectChanges();
+    rendered.querySelector<HTMLButtonElement>('button[aria-label="Edit There Will Be Blood"]')?.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const notes = rendered.querySelector<HTMLTextAreaElement>('textarea[name="editWatchlistNotes"]');
+    expect(app.editingWatchlistNotes).toBe('Recommended by Alex');
+    expect(notes?.value).toBe('Recommended by Alex');
+    expect(rendered.textContent).toContain('19/500');
+    const editPriorityButtons = rendered.querySelector<HTMLFormElement>('form:has(textarea[name="editWatchlistNotes"])')
+      ?.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Priority"] button');
+    editPriorityButtons?.[0].click();
+    fixture.detectChanges();
+    expect(editPriorityButtons?.[0].getAttribute('aria-pressed')).toBe('true');
+
+    app.editingWatchlistNotes = 'Watch on a big screen';
+    await app.saveWatchlistEdit(app.watchlist()[0]);
+    fixture.detectChanges();
+
+    expect(api.updateWatchlistItem).toHaveBeenCalledWith(
+      7, 'There Will Be Blood', 'Watch on a big screen', 'HIGH');
+    expect(rendered.textContent).toContain('Watch on a big screen');
+    expect(rendered.textContent).toContain('↑High');
+  });
+
+  it('confirms before removing a watchlist item', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const app = fixture.componentInstance;
+    app.selectTab('watchlist');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const rendered = fixture.nativeElement as HTMLElement;
+    rendered.querySelector<HTMLButtonElement>('button[aria-label="Remove There Will Be Blood from watchlist"]')?.click();
+    fixture.detectChanges();
+
+    const confirmation = rendered.querySelector<HTMLElement>('[aria-labelledby="watchlist-delete-heading-7"]');
+    expect(confirmation?.textContent).toContain('Remove “There Will Be Blood” from your watchlist?');
+    expect(api.deleteWatchlistItem).not.toHaveBeenCalled();
+
+    confirmation?.querySelector<HTMLButtonElement>('button[type="button"]')?.click();
+    fixture.detectChanges();
+    expect(rendered.querySelector('[aria-labelledby="watchlist-delete-heading-7"]')).toBeNull();
+    expect(rendered.querySelector('button[aria-label="Remove There Will Be Blood from watchlist"]')).not.toBeNull();
+    expect(api.deleteWatchlistItem).not.toHaveBeenCalled();
+
+    app.requestRemoveWatchlistItem(app.watchlist()[0]);
+    await app.confirmRemoveWatchlistItem(app.watchlist()[0]);
+    expect(api.deleteWatchlistItem).toHaveBeenCalledWith(7);
+    expect(app.watchlist()).toHaveLength(0);
+  });
+
+  it('explains when a duplicate title is already in a list', async () => {
+    api.addWatchlistItem.mockRejectedValueOnce(new HttpErrorResponse({ status: 409 }));
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+
+    const app = fixture.componentInstance;
+    app.watchlistTitle = 'Arrival';
+    await app.saveWatchlistItem();
+
+    expect(app.error()).toBe('That title is already in your collection or watchlist.');
   });
 
   it('uses the edit rating control and layout in the add form', async () => {

@@ -9,6 +9,15 @@ export interface Movie {
   rating: number | null;
 }
 
+export interface WatchlistItem {
+  id: number;
+  name: string;
+  notes: string | null;
+  priority: WatchlistPriority;
+}
+
+export type WatchlistPriority = 'LOW' | 'MEDIUM' | 'HIGH';
+
 export interface MovieInput {
   name: string;
   releaseYear: number;
@@ -90,9 +99,37 @@ export class MovieApiService {
     return firstValueFrom(this.http.get<MoviePage>('/api/movies', { params }));
   }
 
-  async createMovie(movie: MovieInput): Promise<Movie> {
+  listWatchlist(): Promise<WatchlistItem[]> {
+    return firstValueFrom(this.http.get<WatchlistItem[]>('/api/watchlist'));
+  }
+
+  async addWatchlistItem(name: string, notes: string, priority: WatchlistPriority): Promise<WatchlistItem> {
     const csrf = await this.csrf();
-    return firstValueFrom(this.http.post<Movie>('/api/movies', movie, {
+    return firstValueFrom(this.http.post<WatchlistItem>('/api/watchlist', { name, notes, priority }, {
+      headers: { [csrf.headerName]: csrf.token },
+    }));
+  }
+
+  async updateWatchlistItem(
+    id: number, name: string, notes: string, priority: WatchlistPriority,
+  ): Promise<WatchlistItem> {
+    const csrf = await this.csrf();
+    return firstValueFrom(this.http.put<WatchlistItem>(`/api/watchlist/${id}`, { name, notes, priority }, {
+      headers: { [csrf.headerName]: csrf.token },
+    }));
+  }
+
+  async deleteWatchlistItem(id: number): Promise<void> {
+    const csrf = await this.csrf();
+    await firstValueFrom(this.http.delete<void>(`/api/watchlist/${id}`, {
+      headers: { [csrf.headerName]: csrf.token },
+    }));
+  }
+
+  async createMovie(movie: MovieInput, watchlistItemId?: number): Promise<Movie> {
+    const csrf = await this.csrf();
+    const body = watchlistItemId === undefined ? movie : { ...movie, watchlistItemId };
+    return firstValueFrom(this.http.post<Movie>('/api/movies', body, {
       headers: { [csrf.headerName]: csrf.token },
     }));
   }

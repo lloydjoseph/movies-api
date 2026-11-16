@@ -87,10 +87,17 @@
   }
   body { min-height: 100vh; margin: 0; }
   button, input, select { font: inherit; }
-  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
-    outline: 2px solid #ea580c;
-    outline-offset: 2px;
-  }
+}
+
+button, a {
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: ease-in-out;
+}
+
+button:focus, a:focus, input:focus, select:focus, textarea:focus {
+  outline: 2px solid #ea580c;
+  outline-offset: 2px;
 }
 
 .hide-number-spinner {
@@ -128,6 +135,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  button, a {
+    transition-duration: 0ms;
+  }
+
   .movie-panel-enter,
   .movie-actions-enter {
     animation: none;

@@ -1,7 +1,8 @@
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { CatalogQuery, Movie, MovieApiService, MovieInput, MovieSort, SignedInUser } from './movie-api.service';
+import { Title } from '@angular/platform-browser';
+import { CatalogQuery, Movie, MovieApiService, MovieInput, MovieSort, SignedInUser, WatchlistItem, WatchlistPriority } from './movie-api.service';
 
 type Theme = 'light' | 'dark';
 type SaveConfirmation = {
@@ -18,9 +19,18 @@ type SaveConfirmation = {
 })
 export class App implements OnDestroy {
   private readonly api = inject(MovieApiService);
+  private readonly documentTitle = inject(Title);
 
   readonly user = signal<SignedInUser | null>(null);
   readonly movies = signal<Movie[]>([]);
+  readonly watchlist = signal<WatchlistItem[]>([]);
+  readonly activeTab = signal<'movies' | 'watchlist'>('movies');
+  readonly watchlistLoading = signal(false);
+  readonly watchlistEditorOpen = signal(false);
+  readonly editingWatchlistItemId = signal<number | null>(null);
+  readonly deletingWatchlistItemId = signal<number | null>(null);
+  readonly savingWatchlistItem = signal(false);
+  readonly pendingWatchlistItemId = signal<number | null>(null);
   readonly loading = signal(true);
   readonly loadingMovies = signal(false);
   readonly loadingMore = signal(false);
@@ -42,6 +52,12 @@ export class App implements OnDestroy {
   readonly theme = signal<Theme>(this.readThemePreference());
 
   title = '';
+  watchlistTitle = '';
+  watchlistNotes = '';
+  watchlistPriority: WatchlistPriority = 'MEDIUM';
+  editingWatchlistTitle = '';
+  editingWatchlistNotes = '';
+  editingWatchlistPriority: WatchlistPriority = 'MEDIUM';
   releaseYear: number | null = new Date().getFullYear();
   rating: number | null = null;
 
@@ -49,11 +65,13 @@ export class App implements OnDestroy {
 
   private readonly pageSize = 50;
   private requestId = 0;
+  private watchlistRequestId = 0;
   private queryTimer: ReturnType<typeof setTimeout> | null = null;
   private saveConfirmationTimer: ReturnType<typeof setTimeout> | null = null;
   private saveConfirmationDismissTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
+    this.updateDocumentTitle();
     void this.loadSession();
   }
 
@@ -86,6 +104,7 @@ export class App implements OnDestroy {
       await this.api.logout();
       this.user.set(null);
       this.movies.set([]);
+      this.watchlist.set([]);
       this.totalItems.set(0);
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Could not sign out. Please try again.'));
@@ -110,8 +129,118 @@ export class App implements OnDestroy {
   }
 
   openCreateForm(): void {
+    this.pendingWatchlistItemId.set(null);
     this.editingMovie.set(null);
     this.title = '';
+    this.releaseYear = new Date().getFullYear();
+    this.rating = null;
+    this.editorOpen.set(true);
+  }
+
+  selectTab(tab: 'movies' | 'watchlist'): void {
+    this.activeTab.set(tab);
+    this.updateDocumentTitle();
+    if (tab === 'watchlist') void this.loadWatchlist();
+  }
+
+  openWatchlistForm(): void {
+    this.watchlistTitle = '';
+    this.watchlistNotes = '';
+    this.watchlistPriority = 'MEDIUM';
+    this.watchlistEditorOpen.set(true);
+  }
+
+  async saveWatchlistItem(): Promise<void> {
+    const name = this.watchlistTitle.trim();
+    if (!name || this.savingWatchlistItem()) return;
+
+    this.savingWatchlistItem.set(true);
+    this.error.set('');
+    try {
+      const item = await this.api.addWatchlistItem(
+        name, this.watchlistNotes.trim(), this.watchlistPriority);
+      this.watchlist.update(items => [...items, item].sort((a, b) => a.name.localeCompare(b.name)));
+      this.watchlistEditorOpen.set(false);
+      this.watchlistTitle = '';
+      this.watchlistNotes = '';
+      this.watchlistPriority = 'MEDIUM';
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Could not add the title to your watchlist. Please try again.'));
+    } finally {
+      this.savingWatchlistItem.set(false);
+    }
+  }
+
+  openWatchlistEdit(item: WatchlistItem): void {
+    this.editingWatchlistItemId.set(item.id);
+    this.editingWatchlistTitle = item.name;
+    this.editingWatchlistNotes = item.notes ?? '';
+    this.editingWatchlistPriority = item.priority;
+  }
+
+  cancelWatchlistEdit(): void {
+    this.editingWatchlistItemId.set(null);
+    this.editingWatchlistTitle = '';
+    this.editingWatchlistNotes = '';
+    this.editingWatchlistPriority = 'MEDIUM';
+  }
+
+  async saveWatchlistEdit(item: WatchlistItem): Promise<void> {
+    const name = this.editingWatchlistTitle.trim();
+    if (!name || this.savingWatchlistItem()) return;
+
+    this.savingWatchlistItem.set(true);
+    this.error.set('');
+    try {
+      const updated = await this.api.updateWatchlistItem(
+        item.id, name, this.editingWatchlistNotes.trim(), this.editingWatchlistPriority);
+      this.watchlist.update(items => items
+        .map(current => current.id === item.id ? updated : current)
+        .sort((a, b) => a.name.localeCompare(b.name)));
+      this.cancelWatchlistEdit();
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Could not update the watchlist item. Please try again.'));
+    } finally {
+      this.savingWatchlistItem.set(false);
+    }
+  }
+
+  requestRemoveWatchlistItem(item: WatchlistItem): void {
+    this.cancelWatchlistEdit();
+    this.deletingWatchlistItemId.set(item.id);
+  }
+
+  cancelRemoveWatchlistItem(): void {
+    this.deletingWatchlistItemId.set(null);
+  }
+
+  async confirmRemoveWatchlistItem(item: WatchlistItem): Promise<void> {
+    this.error.set('');
+    try {
+      await this.api.deleteWatchlistItem(item.id);
+      this.watchlist.update(items => items.filter(current => current.id !== item.id));
+      this.cancelRemoveWatchlistItem();
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Could not remove the title from your watchlist. Please try again.'));
+    }
+  }
+
+  priorityIcon(priority: WatchlistPriority): string {
+    if (priority === 'HIGH') return '↑';
+    if (priority === 'LOW') return '↓';
+    return '−';
+  }
+
+  priorityLabel(priority: WatchlistPriority): string {
+    return priority.charAt(0) + priority.slice(1).toLowerCase();
+  }
+
+  markWatchlistItemSeen(item: WatchlistItem): void {
+    this.selectTab('movies');
+    this.pendingWatchlistItemId.set(item.id);
+    this.editingMovie.set(null);
+    this.deletingMovie.set(null);
+    this.title = item.name;
     this.releaseYear = new Date().getFullYear();
     this.rating = null;
     this.editorOpen.set(true);
@@ -230,6 +359,7 @@ export class App implements OnDestroy {
 
     if (!this.editingMovie()) {
       this.editorOpen.set(false);
+      this.pendingWatchlistItemId.set(null);
       return;
     }
 
@@ -251,6 +381,7 @@ export class App implements OnDestroy {
     this.transitionMovieRow(event, () => {
       this.editorOpen.set(false);
       this.editingMovie.set(null);
+      this.pendingWatchlistItemId.set(null);
     });
   }
 
@@ -305,9 +436,11 @@ export class App implements OnDestroy {
     try {
       const current = this.editingMovie();
       if (current) await this.api.updateMovie(current.id, movie);
-      else await this.api.createMovie(movie);
+      else await this.api.createMovie(movie, this.pendingWatchlistItemId() ?? undefined);
+      const watchlistItemId = current ? null : this.pendingWatchlistItemId();
 
       this.editorOpen.set(false);
+      this.pendingWatchlistItemId.set(null);
       this.clearSaveConfirmationTimers();
       this.saveConfirmationFading.set(false);
       this.saveConfirmation.set({
@@ -326,6 +459,9 @@ export class App implements OnDestroy {
         this.saveConfirmationTimer = null;
       }, 2700);
       await this.reloadMovies();
+      if (watchlistItemId !== null) {
+        this.watchlist.update(items => items.filter(item => item.id !== watchlistItemId));
+      }
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Could not save the movie. Check the details and try again.'));
     } finally {
@@ -415,6 +551,27 @@ export class App implements OnDestroy {
     }
   }
 
+  private async loadWatchlist(): Promise<void> {
+    const requestId = ++this.watchlistRequestId;
+    this.watchlistLoading.set(true);
+    this.error.set('');
+    try {
+      const items = await this.api.listWatchlist();
+      if (requestId === this.watchlistRequestId) this.watchlist.set(items);
+    } catch (error) {
+      if (requestId === this.watchlistRequestId) {
+        this.error.set(this.errorMessage(error, 'Could not load your watchlist. Please try again.'));
+      }
+    } finally {
+      if (requestId === this.watchlistRequestId) this.watchlistLoading.set(false);
+    }
+  }
+
+  private updateDocumentTitle(): void {
+    const page = this.activeTab() === 'watchlist' ? 'Watchlist' : 'Collection';
+    this.documentTitle.setTitle(`${page} | Joseph’s Movies`);
+  }
+
   private handleSessionError(error: unknown): void {
     if (error instanceof HttpErrorResponse && error.status === 401) {
       this.user.set(null);
@@ -434,6 +591,7 @@ export class App implements OnDestroy {
       return 'Your session expired. Sign in again to continue.';
     }
     if (error.status === 400) return 'The movie details were rejected. Check the title, year, and rating.';
+    if (error.status === 409) return 'That title is already in your collection or watchlist.';
     if (error.status === 403) return 'This action was denied. Reload the page and try again.';
     return fallback;
   }
