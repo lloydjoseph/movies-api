@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MovieApiService } from './movie-api.service';
+import type { MoviePage } from './movie-api.service';
 import { App } from './app';
 
 describe('App', () => {
@@ -14,7 +15,7 @@ describe('App', () => {
     updateWatchlistItem: vi.fn((id: number, name: string, notes: string, priority: 'LOW' | 'MEDIUM' | 'HIGH') =>
       Promise.resolve({ id, name, notes: notes || null, priority })),
     deleteWatchlistItem: vi.fn(() => Promise.resolve()),
-    listMovies: () => Promise.resolve({
+    listMovies: (): Promise<MoviePage> => Promise.resolve({
       items: [{ id: 1, name: 'Arrival', releaseYear: 2016, rating: 9 }],
       page: 0,
       size: 50,
@@ -29,6 +30,7 @@ describe('App', () => {
   };
 
   beforeEach(async () => {
+    sessionStorage.clear();
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [{ provide: MovieApiService, useValue: api }],
@@ -60,6 +62,133 @@ describe('App', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Could not load your movies. Please try again.');
     expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('The movie details were rejected.');
     listMovies.mockRestore();
+  });
+
+  it('remembers the collection view for the signed-in account in this tab', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const app = fixture.componentInstance;
+
+    app.onQueryChange('arrival');
+    app.setSort('year_asc');
+    app.toggleRating(8);
+    app.toggleUnrated();
+    app.selectTab('watchlist');
+    fixture.destroy();
+
+    const restored = TestBed.createComponent(App);
+    await restored.whenStable();
+    const restoredApp = restored.componentInstance;
+    expect(restoredApp.query()).toBe('arrival');
+    expect(restoredApp.sortBy()).toBe('year_asc');
+    expect(restoredApp.selectedRatings()).toEqual([8]);
+    expect(restoredApp.includeUnrated()).toBe(true);
+    expect(restoredApp.activeTab()).toBe('watchlist');
+    restored.destroy();
+  });
+
+  it('allows undoing a movie removal before it is sent to the server', async () => {
+    const deleteMovie = vi.spyOn(api, 'deleteMovie');
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const app = fixture.componentInstance;
+    const movie = app.movies()[0];
+    vi.useFakeTimers();
+
+    try {
+      app.deletingMovie.set(movie);
+      app.confirmDelete();
+      expect(app.movies()).toEqual([]);
+      expect(app.pendingMovieDeletion()?.movie).toEqual(movie);
+      expect(deleteMovie).not.toHaveBeenCalled();
+
+      await app.undoMovieDeletion();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(app.movies()).toEqual([movie]);
+      expect(deleteMovie).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      deleteMovie.mockRestore();
+      fixture.destroy();
+    }
+  });
+
+  it('deletes a movie when the undo window expires', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const deleteMovie = vi.spyOn(api, 'deleteMovie');
+    const app = fixture.componentInstance;
+    vi.useFakeTimers();
+
+    try {
+      app.deletingMovie.set(app.movies()[0]);
+      app.confirmDelete();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(deleteMovie).toHaveBeenCalledWith(1);
+    } finally {
+      vi.useRealTimers();
+      deleteMovie.mockRestore();
+      fixture.destroy();
+    }
+  });
+
+  it('commits a pending removal before signing out', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const deleteMovie = vi.spyOn(api, 'deleteMovie');
+    const logout = vi.spyOn(api, 'logout');
+    const app = fixture.componentInstance;
+
+    app.deletingMovie.set(app.movies()[0]);
+    app.confirmDelete();
+    await app.signOut();
+
+    expect(deleteMovie).toHaveBeenCalledWith(1);
+    expect(logout).toHaveBeenCalledOnce();
+    expect(app.user()).toBeNull();
+    deleteMovie.mockRestore();
+    logout.mockRestore();
+    fixture.destroy();
+  });
+
+  it('exports every catalog page as a CSV download', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const listMovies = vi.spyOn(api, 'listMovies')
+      .mockResolvedValueOnce({
+        items: [{ id: 1, name: '=1+1', releaseYear: 2016, rating: 9 }],
+        page: 0, size: 100, totalItems: 2, totalPages: 2, hasNext: true,
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: 2, name: 'Moonlight', releaseYear: 2016, rating: null }],
+        page: 1, size: 100, totalItems: 2, totalPages: 2, hasNext: false,
+      });
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:movie-export');
+    const revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
+    vi.useFakeTimers();
+
+    try {
+      await fixture.componentInstance.exportMovies();
+      expect(listMovies).toHaveBeenNthCalledWith(1, { page: 0, size: 100, title: '', sort: 'none' });
+      expect(listMovies).toHaveBeenNthCalledWith(2, { page: 1, size: 100, title: '', sort: 'none' });
+      expect(createObjectURL).toHaveBeenCalledOnce();
+      expect(click).toHaveBeenCalledOnce();
+      const blob = createObjectURL.mock.calls[0]?.[0];
+      expect(blob).toBeDefined();
+      if (!blob) throw new Error('CSV export did not create a blob');
+      const csv = await blob.text();
+      expect(csv).toContain("\"'=1+1\"");
+      expect(csv).toContain('"Moonlight"');
+      await vi.advanceTimersByTimeAsync(1000);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+      click.mockRestore();
+      listMovies.mockRestore();
+      fixture.destroy();
+    }
   });
 
   it('opens the movie add form with a watchlist title and removes it after saving', async () => {

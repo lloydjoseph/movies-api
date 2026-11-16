@@ -6,6 +6,8 @@ import {
   LucideArrowDown,
   LucideArrowUp,
   LucideArrowUpDown,
+  LucideCircleUserRound,
+  LucideDownload,
   LucideMinus,
   LucideMoon,
   LucidePlus,
@@ -16,12 +18,29 @@ import { CatalogQuery, Movie, MovieApiService, MovieInput, MovieSort, SignedInUs
 
 type Theme = 'light' | 'dark';
 type SortDirection = 'ascending' | 'descending' | 'unsorted';
+type CollectionViewState = {
+  query: string;
+  sortBy: MovieSort;
+  selectedRatings: number[];
+  includeUnrated: boolean;
+  activeTab: 'movies' | 'watchlist';
+};
+type PendingMovieDeletion = {
+  movie: Movie;
+  index: number;
+};
 type SaveConfirmation = {
   action: 'created' | 'updated';
   name: string;
   releaseYear: number;
   rating: number | null;
 };
+
+function isMovieSort(value: unknown): value is MovieSort {
+  return value === 'rating_desc' || value === 'rating_asc'
+    || value === 'year_desc' || value === 'year_asc'
+    || value === 'title_asc' || value === 'title_desc' || value === 'none';
+}
 
 @Component({
   selector: 'app-root',
@@ -30,6 +49,8 @@ type SaveConfirmation = {
     LucideArrowDown,
     LucideArrowUp,
     LucideArrowUpDown,
+    LucideCircleUserRound,
+    LucideDownload,
     LucideMinus,
     LucideMoon,
     LucidePlus,
@@ -55,6 +76,7 @@ export class App implements OnDestroy {
   readonly loading = signal(true);
   readonly loadingMovies = signal(false);
   readonly loadingMore = signal(false);
+  readonly exporting = signal(false);
   readonly totalItems = signal(0);
   readonly hasNext = signal(false);
   readonly page = signal(0);
@@ -69,6 +91,7 @@ export class App implements OnDestroy {
   readonly saveConfirmation = signal<SaveConfirmation | null>(null);
   readonly saveConfirmationFading = signal(false);
   readonly deletingMovie = signal<Movie | null>(null);
+  readonly pendingMovieDeletion = signal<PendingMovieDeletion | null>(null);
   readonly activeMovieActionsId = signal<number | null>(null);
   readonly theme = signal<Theme>(this.readThemePreference());
 
@@ -88,6 +111,7 @@ export class App implements OnDestroy {
   private requestId = 0;
   private watchlistRequestId = 0;
   private queryTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingMovieDeleteTimer: ReturnType<typeof setTimeout> | null = null;
   private saveConfirmationTimer: ReturnType<typeof setTimeout> | null = null;
   private saveConfirmationDismissTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -98,6 +122,11 @@ export class App implements OnDestroy {
 
   ngOnDestroy(): void {
     if (this.queryTimer) clearTimeout(this.queryTimer);
+    if (this.pendingMovieDeletion()) {
+      void this.commitPendingMovieDeletion();
+    } else {
+      this.clearPendingMovieDeleteTimer();
+    }
     this.clearSaveConfirmationTimers();
   }
 
@@ -106,8 +135,11 @@ export class App implements OnDestroy {
     this.error.set(this.loginFailureMessage());
 
     try {
-      this.user.set(await this.api.currentUser());
+      const user = await this.api.currentUser();
+      this.user.set(user);
+      this.restoreCollectionView(user.email);
       await this.loadMovies(true);
+      if (this.activeTab() === 'watchlist') await this.loadWatchlist();
     } catch (error) {
       this.handleSessionError(error);
     } finally {
@@ -122,6 +154,7 @@ export class App implements OnDestroy {
   async signOut(): Promise<void> {
     this.error.set('');
     try {
+      if (this.pendingMovieDeletion() && !await this.commitPendingMovieDeletion()) return;
       await this.api.logout();
       this.user.set(null);
       this.movies.set([]);
@@ -146,6 +179,7 @@ export class App implements OnDestroy {
 
   onSortChange(value: string): void {
     this.sortBy.set(value as MovieSort);
+    this.persistCollectionView();
     void this.loadMovies(true);
   }
 
@@ -160,6 +194,7 @@ export class App implements OnDestroy {
 
   selectTab(tab: 'movies' | 'watchlist'): void {
     this.activeTab.set(tab);
+    this.persistCollectionView();
     this.updateDocumentTitle();
     if (tab === 'watchlist') void this.loadWatchlist();
   }
@@ -274,6 +309,7 @@ export class App implements OnDestroy {
   }
 
   requestDelete(movie: Movie, event?: Event): void {
+    if (this.pendingMovieDeletion()) return;
     this.transitionMovieRow(event, () => {
       this.activeMovieActionsId.set(null);
       this.editingMovie.set(null);
@@ -287,11 +323,13 @@ export class App implements OnDestroy {
   }
 
   toggleMovieActions(movieId: number): void {
+    if (this.pendingMovieDeletion()) return;
     this.activeMovieActionsId.update(current => current === movieId ? null : movieId);
   }
 
   onQueryChange(value: string): void {
     this.query.set(value);
+    this.persistCollectionView();
     if (this.queryTimer !== null) clearTimeout(this.queryTimer);
     this.queryTimer = setTimeout(() => void this.loadMovies(true), 250);
   }
@@ -311,6 +349,7 @@ export class App implements OnDestroy {
   selectAllRatings(): void {
     this.selectedRatings.set([]);
     this.includeUnrated.set(false);
+    this.persistCollectionView();
     void this.loadMovies(true);
   }
 
@@ -321,16 +360,19 @@ export class App implements OnDestroy {
     } else {
       this.selectedRatings.set([...current, score].sort((a, b) => b - a));
     }
+    this.persistCollectionView();
     void this.loadMovies(true);
   }
 
   toggleUnrated(): void {
     this.includeUnrated.update(val => !val);
+    this.persistCollectionView();
     void this.loadMovies(true);
   }
 
   setSort(sort: MovieSort): void {
     this.sortBy.set(sort);
+    this.persistCollectionView();
     void this.loadMovies(true);
   }
 
@@ -507,17 +549,78 @@ export class App implements OnDestroy {
     this.saveConfirmationDismissTimer = null;
   }
 
-  async confirmDelete(): Promise<void> {
+  confirmDelete(): void {
     const movie = this.deletingMovie();
-    if (!movie) return;
+    if (!movie || this.pendingMovieDeletion()) return;
 
     this.error.set('');
+    const index = this.movies().findIndex(current => current.id === movie.id);
+    this.deletingMovie.set(null);
+    if (index >= 0) {
+      this.movies.update(current => current.filter(item => item.id !== movie.id));
+      this.totalItems.update(count => Math.max(0, count - 1));
+    }
+    this.pendingMovieDeletion.set({ movie, index });
+    this.pendingMovieDeleteTimer = setTimeout(() => void this.commitPendingMovieDeletion(), 5000);
+  }
+
+  async undoMovieDeletion(): Promise<void> {
+    const pending = this.pendingMovieDeletion();
+    if (!pending) return;
+
+    this.error.set('');
+    this.clearPendingMovieDeleteTimer();
+    this.pendingMovieDeletion.set(null);
+    if (pending.index >= 0) {
+      this.movies.update(current => current.some(movie => movie.id === pending.movie.id)
+        ? current
+        : [...current.slice(0, pending.index), pending.movie, ...current.slice(pending.index)]);
+      this.totalItems.update(count => count + 1);
+    }
+    await this.reloadMovies();
+  }
+
+  async exportMovies(): Promise<void> {
+    if (this.exporting() || this.pendingMovieDeletion()) return;
+
+    this.exporting.set(true);
+    this.error.set('');
     try {
-      await this.api.deleteMovie(movie.id);
-      this.deletingMovie.set(null);
-      await this.reloadMovies();
+      const movies: Movie[] = [];
+      let page = 0;
+      while (true) {
+        const result = await this.api.listMovies({
+          page,
+          size: 100,
+          title: '',
+          sort: 'none',
+        });
+        movies.push(...result.items);
+        if (!result.hasNext) break;
+        page = result.page + 1;
+      }
+
+      const rows = [
+        ['Title', 'Release year', 'Rating'].map(value => this.csvField(value)).join(','),
+        ...movies.map(movie => [
+          this.csvField(movie.name),
+          this.csvField(movie.releaseYear),
+          this.csvField(movie.rating),
+        ].join(',')),
+      ];
+      const blob = new Blob([`\uFEFF${rows.join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `movies-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Could not remove the movie. Please try again.'));
+      this.error.set(this.errorMessage(error, 'Could not export your movies. Please try again.'));
+    } finally {
+      this.exporting.set(false);
     }
   }
 
@@ -531,8 +634,84 @@ export class App implements OnDestroy {
     return value !== null && value >= 5 ? '#173d32' : '#54251f';
   }
 
+  private async commitPendingMovieDeletion(): Promise<boolean> {
+    const pending = this.pendingMovieDeletion();
+    if (!pending) return true;
+
+    this.clearPendingMovieDeleteTimer();
+    this.pendingMovieDeletion.set(null);
+    try {
+      await this.api.deleteMovie(pending.movie.id);
+      await this.reloadMovies();
+      return true;
+    } catch (error) {
+      const message = this.errorMessage(error, 'Could not remove the movie. Please try again.');
+      await this.reloadMovies();
+      this.error.set(message);
+      return false;
+    }
+  }
+
+  private clearPendingMovieDeleteTimer(): void {
+    if (this.pendingMovieDeleteTimer) clearTimeout(this.pendingMovieDeleteTimer);
+    this.pendingMovieDeleteTimer = null;
+  }
+
   private async reloadMovies(): Promise<void> {
     await this.loadMovies(true);
+  }
+
+  private restoreCollectionView(email: string): void {
+    try {
+      const stored = sessionStorage.getItem(this.collectionViewStorageKey(email));
+      if (!stored) return;
+      const parsed: unknown = JSON.parse(stored);
+      if (typeof parsed !== 'object' || parsed === null) return;
+      const state = parsed as Record<string, unknown>;
+
+      if (typeof state['query'] === 'string') this.query.set(state['query'].slice(0, 100));
+      if (isMovieSort(state['sortBy'])) this.sortBy.set(state['sortBy']);
+      if (Array.isArray(state['selectedRatings'])) {
+        const ratings = state['selectedRatings'].filter((value): value is number =>
+          typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 10);
+        this.selectedRatings.set([...new Set(ratings)].sort((a, b) => b - a));
+      }
+      if (typeof state['includeUnrated'] === 'boolean') this.includeUnrated.set(state['includeUnrated']);
+      if (state['activeTab'] === 'movies' || state['activeTab'] === 'watchlist') {
+        this.activeTab.set(state['activeTab']);
+        this.updateDocumentTitle();
+      }
+    } catch {
+      // Session storage is optional; use the default view if it is unavailable or invalid.
+    }
+  }
+
+  private persistCollectionView(): void {
+    const email = this.user()?.email;
+    if (!email) return;
+    const state: CollectionViewState = {
+      query: this.query(),
+      sortBy: this.sortBy(),
+      selectedRatings: this.selectedRatings(),
+      includeUnrated: this.includeUnrated(),
+      activeTab: this.activeTab(),
+    };
+    try {
+      sessionStorage.setItem(this.collectionViewStorageKey(email), JSON.stringify(state));
+    } catch {
+      // Keep the current view in memory if session storage is unavailable.
+    }
+  }
+
+  private collectionViewStorageKey(email: string): string {
+    return `josephs-movies-view:${encodeURIComponent(email.trim().toLowerCase())}`;
+  }
+
+  private csvField(value: string | number | null): string {
+    if (value === null) return '';
+    const text = String(value);
+    const safeText = /^[\t\r\n ]*[=+\-@]/.test(text) ? `'${text}` : text;
+    return `"${safeText.replaceAll('"', '""')}"`;
   }
 
   private async loadMovies(reset: boolean): Promise<void> {

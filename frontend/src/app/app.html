@@ -4,21 +4,32 @@
       <div class="mx-auto flex min-h-16 max-w-5xl flex-wrap items-center justify-between gap-x-4 px-5 sm:flex-nowrap sm:gap-5 sm:px-8">
         <a class="text-xl font-semibold tracking-tight" href="./">Joseph’s <span class="text-orange-600">Movies</span></a>
         @if (user()) {
-          <nav class="order-3 flex basis-full items-center gap-1 border-t border-stone-200 py-2 dark:border-neutral-800 sm:order-none sm:basis-auto sm:border-0 sm:py-0" aria-label="Main navigation">
-            <button class="min-h-10 cursor-pointer rounded-md px-3 text-sm font-medium hover:bg-stone-100 dark:hover:bg-neutral-800" type="button" (click)="selectTab('movies')" [class.bg-stone-100]="activeTab() === 'movies'" [class.dark:bg-neutral-800]="activeTab() === 'movies'" [attr.aria-current]="activeTab() === 'movies' ? 'page' : null">Collection</button>
-            <button class="min-h-10 cursor-pointer rounded-md px-3 text-sm font-medium hover:bg-stone-100 dark:hover:bg-neutral-800" type="button" (click)="selectTab('watchlist')" [class.bg-stone-100]="activeTab() === 'watchlist'" [class.dark:bg-neutral-800]="activeTab() === 'watchlist'" [attr.aria-current]="activeTab() === 'watchlist' ? 'page' : null">Watchlist</button>
+          <nav class="fixed inset-x-0 bottom-0 z-30 grid w-full grid-cols-2 gap-1 border-t border-stone-200 bg-white p-3 shadow-lg [padding-bottom:calc(env(safe-area-inset-bottom)+0.75rem)] dark:border-neutral-800 dark:bg-neutral-900 sm:static sm:order-none sm:flex sm:w-auto sm:basis-auto sm:grid-cols-none sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:[padding-bottom:0]" aria-label="Main navigation">
+            <button class="min-h-10 w-full cursor-pointer rounded-md px-3 text-sm font-medium hover:bg-stone-100 dark:hover:bg-neutral-800 sm:w-auto" type="button" (click)="selectTab('movies')" [class.bg-stone-100]="activeTab() === 'movies'" [class.dark:bg-neutral-800]="activeTab() === 'movies'" [attr.aria-current]="activeTab() === 'movies' ? 'page' : null">Collection</button>
+            <button class="min-h-10 w-full cursor-pointer rounded-md px-3 text-sm font-medium hover:bg-stone-100 dark:hover:bg-neutral-800 sm:w-auto" type="button" (click)="selectTab('watchlist')" [class.bg-stone-100]="activeTab() === 'watchlist'" [class.dark:bg-neutral-800]="activeTab() === 'watchlist'" [attr.aria-current]="activeTab() === 'watchlist' ? 'page' : null">Watchlist</button>
           </nav>
         }
-        <div class="flex items-center gap-3 sm:gap-5">
+        <div class="flex items-center gap-2 sm:gap-5">
           @if (user(); as account) {
             <span class="hidden max-w-52 truncate text-sm text-stone-600 dark:text-neutral-300 sm:inline">{{ account.name || account.email }}</span>
           }
-          <button class="cursor-pointer rounded-md border border-stone-300 px-3 py-2 text-sm font-medium hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="toggleTheme()" [attr.aria-label]="theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'">
+          <button class="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-md border border-stone-300 hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="toggleTheme()" [attr.aria-label]="theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'">
             @if (theme() === 'dark') { <svg lucideSun class="size-5" aria-hidden="true"></svg> }
             @else { <svg lucideMoon class="size-5" aria-hidden="true"></svg> }
           </button>
+          @if (user(); as account) {
+            <details class="relative sm:hidden">
+              <summary class="flex size-10 shrink-0 cursor-pointer list-none items-center justify-center rounded-md border border-stone-300 hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:hover:bg-neutral-800" aria-label="Account menu">
+                <svg lucideCircleUserRound class="size-5" aria-hidden="true"></svg>
+              </summary>
+              <div class="absolute right-0 z-20 mt-2 w-56 rounded-md border border-stone-200 bg-white p-2 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+                <p class="truncate px-3 py-2 text-sm text-stone-600 dark:text-neutral-300">{{ account.name || account.email }}</p>
+                <button class="w-full cursor-pointer rounded-md px-3 py-2 text-left text-sm font-medium hover:bg-stone-100 dark:hover:bg-neutral-800" type="button" (click)="signOut()">Sign out</button>
+              </div>
+            </details>
+          }
           @if (user()) {
-            <button class="cursor-pointer text-sm font-medium text-stone-600 underline-offset-4 hover:text-orange-700 hover:underline dark:text-neutral-300" type="button" (click)="signOut()">Sign out</button>
+            <button class="hidden cursor-pointer text-sm font-medium text-stone-600 underline-offset-4 hover:text-orange-700 hover:underline dark:text-neutral-300 sm:inline" type="button" (click)="signOut()">Sign out</button>
           }
         </div>
       </div>
@@ -36,19 +47,31 @@
         </button>
       </section>
     } @else {
-      <section class="mx-auto max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
+      <section class="mx-auto max-w-5xl px-5 pt-10 pb-28 sm:px-8 sm:py-14">
         @if (activeTab() === 'movies') {
         <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 class="text-4xl font-semibold tracking-tight sm:text-5xl">Collection</h1>
             <p class="mt-2 text-base text-stone-600 dark:text-neutral-300">{{ totalItems() }} {{ totalItems() === 1 ? 'film' : 'films' }}</p>
           </div>
-          <button class="inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 self-start rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 sm:self-auto" type="button" (click)="openCreateForm()"><svg lucidePlus class="size-5" aria-hidden="true"></svg> Add movie</button>
+          <div class="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto">
+            <button class="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-stone-300 px-3 text-base font-semibold hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:hover:bg-neutral-800 sm:w-auto sm:px-5" type="button" (click)="exportMovies()" [disabled]="exporting() || pendingMovieDeletion() !== null">
+              <svg lucideDownload class="size-5" aria-hidden="true"></svg>{{ exporting() ? 'Exporting…' : 'Export CSV' }}
+            </button>
+            <button class="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-orange-600 px-3 text-base font-semibold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 sm:w-auto sm:px-5" type="button" (click)="openCreateForm()"><svg lucidePlus class="size-5" aria-hidden="true"></svg> Add movie</button>
+          </div>
         </div>
 
         @if (error()) {
           <div class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-300 bg-red-50 p-4 text-base text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">
             <span>{{ error() }}</span><button class="cursor-pointer font-semibold underline" type="button" (click)="loadSession()">Retry</button>
+          </div>
+        }
+
+        @if (pendingMovieDeletion(); as pending) {
+          <div class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-stone-300 bg-stone-100 p-4 text-base dark:border-neutral-700 dark:bg-neutral-900" role="status" aria-live="polite">
+            <span>“{{ pending.movie.name }}” removed.</span>
+            <button class="min-h-11 cursor-pointer rounded-md border border-stone-300 px-4 text-base font-medium hover:bg-stone-100 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="undoMovieDeletion()">Undo</button>
           </div>
         }
 
@@ -220,7 +243,7 @@
                   <li class="relative py-4 sm:py-5" data-movie-row>
                   @if (deletingMovie()?.id === movie.id) {
                     <section class="movie-panel-enter flex flex-col gap-4 rounded-lg border border-red-300 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-labelledby="delete-heading">
-                      <div><h2 id="delete-heading" class="text-lg font-semibold text-red-950 dark:text-red-100">Remove “{{ movie.name }}”?</h2><p class="mt-1 text-base text-red-900 dark:text-red-200">This cannot be undone.</p></div>
+                      <div><h2 id="delete-heading" class="text-lg font-semibold text-red-950 dark:text-red-100">Remove “{{ movie.name }}”?</h2><p class="mt-1 text-base text-red-900 dark:text-red-200">You can undo this for 5 seconds.</p></div>
                       <div class="flex gap-3"><button class="min-h-11 cursor-pointer rounded-md border border-stone-300 px-4 text-base font-medium dark:border-neutral-700" type="button" (click)="cancelDelete($event)">Cancel</button><button class="min-h-11 cursor-pointer rounded-md bg-red-700 px-4 text-base font-semibold text-white hover:bg-red-800" type="button" (click)="confirmDelete()">Remove movie</button></div>
                     </section>
                   } @else if (editorOpen() && editingMovie()?.id === movie.id) {
@@ -260,7 +283,7 @@
                     </section>
                   } @else {
                   <div class="flex items-center gap-2 sm:gap-5">
-                    <button class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left sm:gap-5" type="button" (click)="toggleMovieActions(movie.id)" [attr.aria-expanded]="activeMovieActionsId() === movie.id" [attr.aria-label]="'Actions for ' + movie.name">
+                    <button class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left disabled:cursor-not-allowed disabled:opacity-60 sm:gap-5" type="button" (click)="toggleMovieActions(movie.id)" [disabled]="pendingMovieDeletion() !== null" [attr.aria-expanded]="activeMovieActionsId() === movie.id" [attr.aria-label]="'Actions for ' + movie.name">
                       <span class="min-w-0 flex-1 break-words text-lg font-semibold leading-snug sm:truncate sm:text-xl">{{ movie.name }}</span>
                       <span class="w-16 shrink-0 text-center text-base text-stone-600 dark:text-neutral-300">{{ movie.releaseYear }}</span>
                       <span class="inline-flex min-w-20 w-fit shrink-0 items-center justify-center gap-1 rounded-md px-3 py-2 text-base font-semibold" [style.background-color]="ratingColor(movie.rating)" [style.color]="ratingTextColor(movie.rating)">{{ movie.rating === null ? 'Unrated' : movie.rating + ' / 10' }}</span>
