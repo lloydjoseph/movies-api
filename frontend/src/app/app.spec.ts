@@ -64,6 +64,31 @@ describe('App', () => {
     listMovies.mockRestore();
   });
 
+  it('closes the active dialog and returns to sign-in when the session expires', async () => {
+    const createMovie = vi.spyOn(api, 'createMovie')
+      .mockRejectedValueOnce(new HttpErrorResponse({ status: 401 }));
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const app = fixture.componentInstance;
+
+    app.openCreateForm();
+    fixture.detectChanges();
+    app.title = 'New movie';
+    app.releaseYear = 2025;
+    await app.saveMovie();
+    fixture.detectChanges();
+
+    const rendered = fixture.nativeElement as HTMLElement;
+    expect(app.user()).toBeNull();
+    expect(app.editorOpen()).toBe(false);
+    expect(rendered.querySelector('dialog[open]')).toBeNull();
+    expect(rendered.textContent).toContain('Your session expired. Sign in again to continue.');
+    expect(rendered.textContent).toContain('Sign in with Google');
+    createMovie.mockRestore();
+    fixture.destroy();
+  });
+
   it('remembers the collection view for the signed-in account in this tab', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
@@ -229,18 +254,34 @@ describe('App', () => {
     expect(rendered.textContent).toContain('Recommended by Alex');
     app.openWatchlistForm();
     fixture.detectChanges();
+    const watchlistEditor = rendered.querySelector<HTMLElement>('dialog[open] [aria-labelledby="watchlist-editor-heading"]');
+    expect(watchlistEditor).not.toBeNull();
+    expect(watchlistEditor?.className).toContain('min-h-full');
+    const watchlistActions = watchlistEditor?.querySelector('form')?.lastElementChild;
+    expect(watchlistActions?.className).toContain('grid-cols-2');
+    expect(watchlistActions?.querySelector('button[type="button"]')?.className).toContain('w-full');
+    expect(watchlistActions?.querySelector('button[type="submit"]')?.className).toContain('w-full');
+    expect(watchlistEditor?.querySelector('[aria-label="Priority"]')?.className).toContain('w-full');
+    expect(watchlistEditor?.querySelector('[aria-label="Priority"]')?.className).not.toContain('sm:w-72');
     const addPriorityButtons = rendered.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Priority"] button');
     expect(addPriorityButtons).toHaveLength(3);
     expect(addPriorityButtons[0].textContent).toContain('High');
     expect(addPriorityButtons[1].getAttribute('aria-pressed')).toBe('true');
     expect(addPriorityButtons[2].textContent).toContain('Low');
-    app.watchlistEditorOpen.set(false);
+    addPriorityButtons[0].click();
+    fixture.detectChanges();
+    addPriorityButtons[1].click();
+    fixture.detectChanges();
+    expect(addPriorityButtons[1].className).toContain('bg-indigo-100');
+    expect(addPriorityButtons[1].className).toContain('dark:bg-indigo-950');
+    app.closeWatchlistForm();
     fixture.detectChanges();
     rendered.querySelector<HTMLButtonElement>('button[aria-label="Edit There Will Be Blood"]')?.click();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
+    expect(rendered.querySelector('dialog[open] [aria-labelledby="watchlist-edit-heading"]')).not.toBeNull();
     const notes = rendered.querySelector<HTMLTextAreaElement>('textarea[name="editWatchlistNotes"]');
     expect(app.editingWatchlistNotes).toBe('Recommended by Alex');
     expect(notes?.value).toBe('Recommended by Alex');
@@ -276,6 +317,8 @@ describe('App', () => {
 
     const confirmation = rendered.querySelector<HTMLElement>('[aria-labelledby="watchlist-delete-heading-7"]');
     expect(confirmation?.textContent).toContain('Remove “There Will Be Blood” from your watchlist?');
+    expect(confirmation?.closest('dialog')?.open).toBe(true);
+    expect(confirmation?.closest('li')).toBeNull();
     expect(api.deleteWatchlistItem).not.toHaveBeenCalled();
 
     confirmation?.querySelector<HTMLButtonElement>('button[type="button"]')?.click();
@@ -315,16 +358,36 @@ describe('App', () => {
 
     const editor = rendered.querySelector<HTMLElement>('[aria-labelledby="editor-heading"]');
     const ratingButtons = editor?.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Rating"] button');
-    expect(editor?.querySelector('form')?.className).toContain('grid-cols-[minmax(0,1fr)_5rem]');
+    expect(editor?.querySelector('form')?.className).toContain('grid-cols-1');
+    expect(editor?.querySelector('form')?.className).not.toContain('grid-cols-[minmax(0,1fr)_5rem]');
+    const addFormActions = editor?.querySelector('form')?.lastElementChild;
+    expect(addFormActions?.className).toContain('grid-cols-2');
+    expect(addFormActions?.querySelector('button[type="button"]')?.className).toContain('w-full');
+    const addButton = addFormActions?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    expect(addButton?.className).toContain('w-full');
+    expect(addButton?.className).toContain('bg-orange-600');
+    expect(editor?.textContent).not.toContain('Title and release year are required.');
+    expect(editor?.querySelector('label')?.textContent?.trim()).toBe('Title');
+    expect(editor?.querySelector<HTMLInputElement>('input[name="title"]')?.required).toBe(true);
+    expect(editor?.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
+    expect(editor?.querySelector('[role="group"][aria-label="Rating"]')?.parentElement?.textContent).toContain('Optional');
     expect(ratingButtons?.length).toBe(10);
+    expect(ratingButtons?.[0].className).toContain('rounded-md');
+    expect(editor?.querySelector('[role="group"][aria-label="Rating"]')?.className).toContain('grid-cols-2');
+    expect(editor?.querySelector('[role="group"][aria-label="Rating"]')?.className).toContain('sm:grid-cols-5');
+    expect(editor?.querySelector('[role="group"][aria-label="Rating"]')?.className).toContain('lg:grid-cols-10');
+    expect(ratingButtons?.[0].className).toContain('w-full');
+    expect(ratingButtons?.[0].className).not.toContain('border-r');
     expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 10"]')?.getAttribute('aria-pressed')).toBe('false');
 
     editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.click();
     fixture.detectChanges();
     expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.className).toContain('border-transparent');
     editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.click();
     fixture.detectChanges();
     expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.getAttribute('aria-pressed')).toBe('false');
+    expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.className).toContain('border-stone-300');
   });
 
   it('shows an inline add or edit summary with table-style movie details', async () => {
@@ -453,24 +516,23 @@ describe('App', () => {
     expect(app.isAllSelected()).toBe(true);
   });
 
-  it('shows and hides mobile movie actions from the movie row', async () => {
+  it('shows an edit column that opens the movie editor', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     fixture.detectChanges();
 
     const rendered = fixture.nativeElement as HTMLElement;
-    const movieRow = rendered.querySelector<HTMLButtonElement>('button[aria-label="Actions for Arrival"]');
+    const movieRow = rendered.querySelector<HTMLButtonElement>('button[aria-label="Edit Arrival"]');
     expect(movieRow).not.toBeNull();
-
+    expect(movieRow?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    expect(movieRow?.className).toContain('size-10');
+    const editHeader = Array.from(rendered.querySelectorAll('span'))
+      .find(span => span.textContent?.trim() === 'Edit');
+    expect(editHeader?.className).toContain('w-10');
     movieRow?.click();
     fixture.detectChanges();
-    expect(movieRow?.getAttribute('aria-expanded')).toBe('true');
-    expect(rendered.querySelector('button[aria-label="Edit Arrival"]')).not.toBeNull();
-    expect(rendered.querySelector('button[aria-label="Remove Arrival"]')).not.toBeNull();
-
-    rendered.querySelector<HTMLButtonElement>('button[aria-label="Close movie actions"]')?.click();
-    fixture.detectChanges();
-    expect(movieRow?.getAttribute('aria-expanded')).toBe('false');
+    expect(rendered.querySelector('[aria-labelledby="editor-heading"]')).not.toBeNull();
+    expect(rendered.querySelector('button[aria-label="Delete Arrival"]')).not.toBeNull();
   });
 
   it('shows a matching-movies message when active filters return no results', async () => {
@@ -489,78 +551,129 @@ describe('App', () => {
     expect(rendered.textContent).not.toContain('Add a movie to get started.');
   });
 
-  it('opens the edit form in place of the selected movie row', async () => {
+  it('opens the edit form in a modal above the collection', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     fixture.detectChanges();
 
     const rendered = fixture.nativeElement as HTMLElement;
-    rendered.querySelector<HTMLButtonElement>('button[aria-label="Actions for Arrival"]')?.click();
-    fixture.detectChanges();
     rendered.querySelector<HTMLButtonElement>('button[aria-label="Edit Arrival"]')?.click();
+    await fixture.whenStable();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const inlineEditor = rendered.querySelector<HTMLElement>('[aria-labelledby="inline-editor-heading"]');
-    expect(inlineEditor).not.toBeNull();
-    expect(inlineEditor?.closest('li')).not.toBeNull();
-    expect(inlineEditor?.querySelector<HTMLInputElement>('input[name="title"]')?.value).toBe('Arrival');
-    expect(inlineEditor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 9"]')?.getAttribute('aria-pressed')).toBe('true');
-    inlineEditor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.click();
+    const editor = rendered.querySelector<HTMLElement>('[aria-labelledby="editor-heading"]');
+    expect(editor).not.toBeNull();
+    expect(editor?.closest('dialog')?.open).toBe(true);
+    expect(editor?.closest('dialog')?.className).toContain('lg:max-w-2xl');
+    expect(editor?.closest('li')).toBeNull();
+    expect(editor?.className).toContain('min-h-full');
+    expect(editor?.querySelector<HTMLInputElement>('input[name="title"]')?.value).toBe('Arrival');
+    const editFormActions = editor?.querySelector('form')?.lastElementChild;
+    expect(editFormActions?.className).toContain('grid-cols-2');
+    const deleteButton = editFormActions?.querySelector<HTMLButtonElement>('[aria-label="Delete Arrival"]');
+    expect(deleteButton?.parentElement?.className).toContain('col-span-2');
+    expect(deleteButton?.parentElement?.className).toContain('border-t');
+    expect(deleteButton?.className).toContain('border-red-300');
+    expect(deleteButton?.className).toContain('bg-white');
+    const saveButton = editFormActions?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    expect(saveButton?.className).toContain('bg-stone-900');
+    expect(saveButton?.className).toContain('dark:bg-white');
+    expect(saveButton?.className).toContain('dark:text-stone-900');
+    expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 9"]')?.getAttribute('aria-pressed')).toBe('true');
+    editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.click();
     fixture.detectChanges();
-    expect(inlineEditor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.getAttribute('aria-pressed')).toBe('true');
-    inlineEditor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.click();
+    expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.getAttribute('aria-pressed')).toBe('true');
+    editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.click();
     fixture.detectChanges();
-    expect(inlineEditor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.getAttribute('aria-pressed')).toBe('false');
-    expect(rendered.querySelector('[aria-labelledby="editor-heading"]')).toBeNull();
+    expect(editor?.querySelector<HTMLButtonElement>('button[aria-label="Rating 8"]')?.getAttribute('aria-pressed')).toBe('false');
 
-    Array.from(inlineEditor?.querySelectorAll<HTMLButtonElement>('button[type="button"]') ?? [])
+    Array.from(editor?.querySelectorAll<HTMLButtonElement>('button[type="button"]') ?? [])
       .find(button => button.textContent?.trim() === 'Cancel')
       ?.click();
     fixture.detectChanges();
-    expect(rendered.querySelector('[aria-labelledby="inline-editor-heading"]')).toBeNull();
-    expect(rendered.querySelector('button[aria-label="Actions for Arrival"]')).not.toBeNull();
+    expect(rendered.querySelector('[aria-labelledby="editor-heading"]')).toBeNull();
+    expect(rendered.querySelector('button[aria-label="Edit Arrival"]')).not.toBeNull();
   });
 
-  it('shows delete confirmation in place of the selected movie row', async () => {
+  it('closes the editor when Escape is pressed', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const app = fixture.componentInstance;
+    app.openCreateForm();
+    fixture.detectChanges();
+
+    const dialog = (fixture.nativeElement as HTMLElement).querySelector<HTMLDialogElement>('#editor-dialog');
+    const cancelEvent = new Event('cancel', { cancelable: true });
+    dialog?.dispatchEvent(cancelEvent);
+    fixture.detectChanges();
+
+    expect(cancelEvent.defaultPrevented).toBe(true);
+    expect(dialog?.open).toBe(false);
+    expect(app.editorOpen()).toBe(false);
+  });
+
+  it('shows a compact delete confirmation dialog', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     fixture.detectChanges();
 
+    const app = fixture.componentInstance;
     const rendered = fixture.nativeElement as HTMLElement;
-    rendered.querySelector<HTMLButtonElement>('button[aria-label="Actions for Arrival"]')?.click();
+    rendered.querySelector<HTMLButtonElement>('button[aria-label="Edit Arrival"]')?.click();
+    await fixture.whenStable();
     fixture.detectChanges();
-    rendered.querySelector<HTMLButtonElement>('button[aria-label="Remove Arrival"]')?.click();
+    expect(rendered.querySelector<HTMLInputElement>('input[name="title"]')?.value).toBe('Arrival');
+    rendered.querySelector<HTMLButtonElement>('button[aria-label="Delete Arrival"]')?.click();
     fixture.detectChanges();
 
     const confirmation = rendered.querySelector<HTMLElement>('[aria-labelledby="delete-heading"]');
     expect(confirmation).not.toBeNull();
-    expect(confirmation?.closest('li')).not.toBeNull();
+    expect(confirmation?.closest('dialog')?.open).toBe(true);
+    expect(confirmation?.closest('li')).toBeNull();
     expect(confirmation?.textContent).toContain('Remove “Arrival”?');
-    expect(rendered.querySelector('button[aria-label="Actions for Arrival"]')).toBeNull();
 
     confirmation?.querySelector<HTMLButtonElement>('button[type="button"]')?.click();
     fixture.detectChanges();
     expect(rendered.querySelector('[aria-labelledby="delete-heading"]')).toBeNull();
-    expect(rendered.querySelector('button[aria-label="Actions for Arrival"]')).not.toBeNull();
+    expect(rendered.querySelector('[aria-labelledby="editor-heading"]')).not.toBeNull();
+    expect(rendered.querySelector<HTMLInputElement>('input[name="title"]')?.value).toBe('Arrival');
+    Array.from(rendered.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.textContent?.trim() === 'Cancel')
+      ?.click();
+    fixture.detectChanges();
+    expect(rendered.querySelector('button[aria-label="Edit Arrival"]')).not.toBeNull();
+
+    rendered.querySelector<HTMLButtonElement>('button[aria-label="Edit Arrival"]')?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    rendered.querySelector<HTMLButtonElement>('button[aria-label="Delete Arrival"]')?.click();
+    fixture.detectChanges();
+    Array.from(rendered.querySelectorAll<HTMLButtonElement>('[aria-labelledby="delete-heading"] button'))
+      .find(button => button.textContent?.trim() === 'Remove movie')
+      ?.click();
+    fixture.detectChanges();
+    expect(rendered.querySelector('[aria-labelledby="editor-heading"]')).toBeNull();
+    expect(app.pendingMovieDeletion()?.movie.name).toBe('Arrival');
+    await app.undoMovieDeletion();
+    await fixture.whenStable();
   });
 
-  it('shows edit field errors after saving with empty required fields', async () => {
+  it('disables the movie submit button until required fields are valid', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     fixture.detectChanges();
 
     const rendered = fixture.nativeElement as HTMLElement;
-    rendered.querySelector<HTMLButtonElement>('button[aria-label="Actions for Arrival"]')?.click();
-    fixture.detectChanges();
     rendered.querySelector<HTMLButtonElement>('button[aria-label="Edit Arrival"]')?.click();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const inlineEditor = rendered.querySelector<HTMLElement>('[aria-labelledby="inline-editor-heading"]');
-    const titleInput = inlineEditor?.querySelector<HTMLInputElement>('input[name="title"]');
-    const yearInput = inlineEditor?.querySelector<HTMLInputElement>('input[name="releaseYear"]');
+    const editor = rendered.querySelector<HTMLElement>('[aria-labelledby="editor-heading"]');
+    const titleInput = editor?.querySelector<HTMLInputElement>('input[name="title"]');
+    const yearInput = editor?.querySelector<HTMLInputElement>('input[name="releaseYear"]');
     expect(titleInput).not.toBeNull();
     expect(yearInput).not.toBeNull();
 
@@ -572,10 +685,17 @@ describe('App', () => {
     }
     await fixture.whenStable();
     fixture.detectChanges();
-    inlineEditor?.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
-    fixture.detectChanges();
+    const submitButton = editor?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    expect(submitButton?.disabled).toBe(true);
 
-    expect(inlineEditor?.textContent).toContain('Enter a movie title.');
-    expect(inlineEditor?.textContent).toContain('Enter a valid release year.');
+    if (titleInput && yearInput) {
+      titleInput.value = 'Arrival';
+      titleInput.dispatchEvent(new Event('input'));
+      yearInput.value = '2024';
+      yearInput.dispatchEvent(new Event('input'));
+    }
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(submitButton?.disabled).toBe(false);
   });
 });

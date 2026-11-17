@@ -35,6 +35,155 @@
       </div>
     </header>
 
+    <dialog id="editor-dialog" #editorDialog class="m-0 h-dvh max-h-none w-full max-w-none overflow-y-auto border-0 bg-white p-0 text-stone-900 backdrop:bg-black/50 dark:bg-neutral-900 dark:text-stone-100 lg:m-auto lg:h-fit lg:max-h-[90dvh] lg:max-w-2xl lg:rounded-xl lg:border lg:border-stone-200 dark:lg:border-neutral-800" (cancel)="onEditorDialogCancel($event)" (click)="onEditorDialogClick($event)">
+      @if (editorOpen()) {
+        <section class="min-h-full p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] lg:p-7" aria-labelledby="editor-heading">
+          <div>
+            <h2 id="editor-heading" class="text-2xl font-semibold">{{ editingMovie() ? 'Edit movie' : 'Add a movie' }}</h2>
+          </div>
+          @if (error()) { <p class="mt-5 rounded-md border border-red-300 bg-red-50 p-4 text-base text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">{{ error() }}</p> }
+          <form class="mt-6 grid grid-cols-1 gap-4" #movieForm="ngForm" novalidate (ngSubmit)="saveMovie()">
+            <label class="flex min-w-0 flex-col gap-2 text-base font-medium"><span>Title</span>
+              <input class="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="title" required maxlength="255" [(ngModel)]="title" placeholder="Movie title" autofocus>
+              @if (movieForm.submitted && !title.trim()) { <span class="text-sm font-normal text-red-700 dark:text-red-300" role="alert">Enter a movie title.</span> }
+            </label>
+            <label class="flex min-w-0 flex-col gap-2 text-base font-medium"><span>Year</span>
+              <input class="hide-number-spinner min-h-12 w-full min-w-0 appearance-none rounded-md border border-stone-300 bg-white px-3 text-base focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950" name="releaseYear" required type="number" min="1" max="9999" [(ngModel)]="releaseYear">
+              @if (movieForm.submitted && (!releaseYear || releaseYear < 1 || releaseYear > 9999)) { <span class="text-sm font-normal text-red-700 dark:text-red-300" role="alert">Enter a valid release year.</span> }
+            </label>
+            <div class="col-span-full flex flex-col gap-2">
+              <span class="text-base font-medium">Rating</span>
+              <div class="grid w-full grid-cols-2 gap-1.5 sm:grid-cols-5 lg:grid-cols-10" role="group" aria-label="Rating">
+                @for (score of [10,9,8,7,6,5,4,3,2,1]; track score) {
+                  <button class="flex h-10 w-full cursor-pointer items-center justify-center rounded-md border text-base font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-orange-600"
+                    type="button" (click)="rating = rating === score ? null : score" [attr.aria-label]="'Rating ' + score" [attr.aria-pressed]="rating === score"
+                    [style.background-color]="rating === score ? ratingColor(score) : ''"
+                    [style.color]="rating === score ? ratingTextColor(score) : ''"
+                    [class.border-stone-300]="rating !== score"
+                    [class.border-transparent]="rating === score" [class.bg-white]="rating !== score"
+                    [class.dark:border-neutral-700]="rating !== score" [class.dark:border-transparent]="rating === score"
+                    [class.dark:bg-neutral-900]="rating !== score"
+                    [class.hover:bg-stone-100]="rating !== score" [class.dark:hover:bg-neutral-800]="rating !== score">
+                    {{ score }}
+                  </button>
+                }
+              </div>
+              <p class="text-sm font-normal text-stone-500 dark:text-neutral-400">Optional</p>
+            </div>
+            <div class="col-span-full grid grid-cols-2 gap-3 border-t border-stone-200 pt-4 dark:border-neutral-800 lg:flex lg:items-center lg:justify-end">
+              <button class="min-h-12 w-full cursor-pointer rounded-md border border-stone-300 px-5 text-base font-medium hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:hover:bg-neutral-800 lg:order-2 lg:w-auto" type="button" (click)="closeEditor()">Cancel</button>
+              <button class="min-h-12 w-full cursor-pointer rounded-md px-5 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 lg:order-3 lg:w-auto"
+                [class.bg-orange-600]="!editingMovie()" [class.hover:bg-orange-700]="!editingMovie()"
+                [class.bg-stone-900]="editingMovie()" [class.hover:bg-stone-800]="editingMovie()"
+                [class.dark:bg-white]="editingMovie()" [class.dark:text-stone-900]="editingMovie()" [class.dark:hover:bg-stone-200]="editingMovie()"
+                type="submit" [disabled]="movieForm.invalid || !title.trim() || saving()">{{ saving() ? 'Saving…' : editingMovie() ? 'Save changes' : 'Add movie' }}</button>
+              @if (editingMovie(); as movie) {
+                <div class="col-span-2 row-start-2 border-t border-stone-200 pt-3 dark:border-neutral-800 lg:order-1 lg:mr-auto lg:border-0 lg:pt-0">
+                  <button class="min-h-12 w-full cursor-pointer rounded-md border border-red-300 bg-white px-5 text-base font-medium text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900 dark:bg-neutral-900 dark:text-red-300 dark:hover:bg-red-950 lg:w-auto" type="button" (click)="requestDelete(movie)" [disabled]="saving()" [attr.aria-label]="'Delete ' + movie.name">Delete</button>
+                </div>
+              }
+            </div>
+          </form>
+        </section>
+      } @else if (watchlistEditorOpen()) {
+        <section class="min-h-full p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] lg:p-7" aria-labelledby="watchlist-editor-heading">
+          <h2 id="watchlist-editor-heading" class="text-2xl font-semibold">Add to your watchlist</h2>
+          @if (error()) { <p class="mt-5 rounded-md border border-red-300 bg-red-50 p-4 text-base text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">{{ error() }}</p> }
+          <form class="mt-6 flex flex-col gap-4" #watchlistForm="ngForm" (ngSubmit)="saveWatchlistItem()">
+            <label class="flex min-w-0 flex-col gap-2 text-base font-medium"><span>Title</span>
+              <input class="min-h-12 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="watchlistTitle" required maxlength="255" [(ngModel)]="watchlistTitle" placeholder="Movie title" autofocus>
+            </label>
+            <fieldset class="flex flex-col gap-3">
+              <legend class="mb-2 block text-sm font-medium">Priority</legend>
+              <div class="inline-flex min-h-12 w-full gap-2" role="group" aria-label="Priority">
+                <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600 hover:bg-sky-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-sky-900"
+                  type="button" (click)="watchlistPriority = 'HIGH'" [attr.aria-pressed]="watchlistPriority === 'HIGH'"
+                  [class.bg-sky-100]="watchlistPriority === 'HIGH'" [class.text-sky-900]="watchlistPriority === 'HIGH'"
+                  [class.dark:bg-sky-950]="watchlistPriority === 'HIGH'" [class.dark:text-sky-100]="watchlistPriority === 'HIGH'"><svg lucideArrowUp class="size-4" aria-hidden="true"></svg>High</button>
+                <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 px-3 text-sm font-medium hover:bg-indigo-200 dark:border-neutral-700 dark:hover:bg-indigo-900"
+                  type="button" (click)="watchlistPriority = 'MEDIUM'" [attr.aria-pressed]="watchlistPriority === 'MEDIUM'"
+                  [class.bg-stone-50]="watchlistPriority !== 'MEDIUM'" [class.text-stone-600]="watchlistPriority !== 'MEDIUM'"
+                  [class.dark:bg-neutral-950]="watchlistPriority !== 'MEDIUM'" [class.dark:text-neutral-300]="watchlistPriority !== 'MEDIUM'"
+                  [class.bg-indigo-100]="watchlistPriority === 'MEDIUM'" [class.text-indigo-900]="watchlistPriority === 'MEDIUM'"
+                  [class.dark:bg-indigo-950]="watchlistPriority === 'MEDIUM'" [class.dark:text-indigo-100]="watchlistPriority === 'MEDIUM'"><svg lucideMinus class="size-4" aria-hidden="true"></svg>Medium</button>
+                <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600 hover:bg-purple-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-purple-900"
+                  type="button" (click)="watchlistPriority = 'LOW'" [attr.aria-pressed]="watchlistPriority === 'LOW'"
+                  [class.bg-purple-100]="watchlistPriority === 'LOW'" [class.text-purple-900]="watchlistPriority === 'LOW'"
+                  [class.dark:bg-purple-950]="watchlistPriority === 'LOW'" [class.dark:text-purple-100]="watchlistPriority === 'LOW'"><svg lucideArrowDown class="size-4" aria-hidden="true"></svg>Low</button>
+              </div>
+            </fieldset>
+            <label class="flex min-w-0 flex-1 flex-col gap-2 text-base font-medium">Notes
+              <textarea class="min-h-12 resize-y rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-normal text-stone-900 placeholder:text-stone-400 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="watchlistNotes" maxlength="500" rows="2" [(ngModel)]="watchlistNotes" placeholder="Why you want to watch it"></textarea>
+              <div class="flex items-center justify-between text-xs font-normal text-stone-500 dark:text-neutral-400"><span class="text-sm">Optional</span><span>{{ watchlistNotes.length }}/500</span></div>
+            </label>
+            <div class="grid grid-cols-2 gap-3 border-t border-stone-200 pt-4 dark:border-neutral-800 lg:flex lg:justify-end">
+              <button class="min-h-12 w-full cursor-pointer rounded-md border border-stone-300 px-5 text-base font-medium hover:bg-stone-100 dark:border-neutral-700 dark:hover:bg-neutral-800 lg:w-auto" type="button" (click)="closeWatchlistForm()">Cancel</button>
+              <button class="min-h-12 w-full cursor-pointer rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto" type="submit" [disabled]="watchlistForm.invalid || savingWatchlistItem()">{{ savingWatchlistItem() ? 'Saving…' : 'Add title' }}</button>
+            </div>
+          </form>
+        </section>
+      } @else if (editingWatchlistItem(); as item) {
+        <section class="p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] lg:p-7" aria-labelledby="watchlist-edit-heading">
+          <h2 id="watchlist-edit-heading" class="text-2xl font-semibold">Edit “{{ item.name }}”</h2>
+          @if (error()) { <p class="mt-5 rounded-md border border-red-300 bg-red-50 p-4 text-base text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">{{ error() }}</p> }
+          <form class="mt-6 flex flex-col gap-4" (ngSubmit)="saveWatchlistEdit(item)">
+            <label class="flex min-w-0 flex-col gap-2 text-base font-medium"><span>Title</span>
+              <input class="min-h-12 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="editWatchlistTitle" required maxlength="255" [(ngModel)]="editingWatchlistTitle" autofocus>
+            </label>
+            <fieldset class="flex flex-col gap-3">
+              <legend class="mb-2 block text-sm font-medium">Priority</legend>
+              <div class="inline-flex min-h-12 w-full gap-2 sm:w-72" role="group" aria-label="Priority">
+                <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600 hover:bg-sky-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-sky-900"
+                  type="button" (click)="editingWatchlistPriority = 'HIGH'" [attr.aria-pressed]="editingWatchlistPriority === 'HIGH'"
+                  [class.bg-sky-100]="editingWatchlistPriority === 'HIGH'" [class.text-sky-900]="editingWatchlistPriority === 'HIGH'"
+                  [class.dark:bg-sky-950]="editingWatchlistPriority === 'HIGH'" [class.dark:text-sky-100]="editingWatchlistPriority === 'HIGH'"><svg lucideArrowUp class="size-4" aria-hidden="true"></svg>High</button>
+                <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600 hover:bg-indigo-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-indigo-900"
+                  type="button" (click)="editingWatchlistPriority = 'MEDIUM'" [attr.aria-pressed]="editingWatchlistPriority === 'MEDIUM'"
+                  [class.bg-indigo-100]="editingWatchlistPriority === 'MEDIUM'" [class.text-indigo-900]="editingWatchlistPriority === 'MEDIUM'"
+                  [class.dark:bg-indigo-950]="editingWatchlistPriority === 'MEDIUM'" [class.dark:text-indigo-100]="editingWatchlistPriority === 'MEDIUM'"><svg lucideMinus class="size-4" aria-hidden="true"></svg>Medium</button>
+                <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600 hover:bg-purple-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-purple-900"
+                  type="button" (click)="editingWatchlistPriority = 'LOW'" [attr.aria-pressed]="editingWatchlistPriority === 'LOW'"
+                  [class.bg-purple-100]="editingWatchlistPriority === 'LOW'" [class.text-purple-900]="editingWatchlistPriority === 'LOW'"
+                  [class.dark:bg-purple-950]="editingWatchlistPriority === 'LOW'" [class.dark:text-purple-100]="editingWatchlistPriority === 'LOW'"><svg lucideArrowDown class="size-4" aria-hidden="true"></svg>Low</button>
+              </div>
+            </fieldset>
+            <label class="flex flex-col gap-2 text-base font-medium">Notes
+              <textarea class="min-h-20 resize-y rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-normal dark:border-neutral-700 dark:bg-neutral-950" name="editWatchlistNotes" maxlength="500" rows="3" [(ngModel)]="editingWatchlistNotes"></textarea>
+              <div class="flex items-center justify-between text-xs font-normal text-stone-500 dark:text-neutral-400"><span class="text-sm">Optional</span><span>{{ editingWatchlistNotes.length }}/500</span></div>
+            </label>
+            <div class="flex flex-col-reverse gap-3 border-t border-stone-200 pt-4 dark:border-neutral-800 sm:flex-row sm:justify-end">
+              <button class="min-h-12 cursor-pointer rounded-md border border-stone-300 px-5 text-base font-medium hover:bg-stone-100 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="cancelWatchlistEdit()">Cancel</button>
+              <button class="min-h-12 cursor-pointer rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50" type="submit" [disabled]="!editingWatchlistTitle.trim() || savingWatchlistItem()">{{ savingWatchlistItem() ? 'Saving…' : 'Save changes' }}</button>
+            </div>
+          </form>
+        </section>
+      }
+    </dialog>
+
+    <dialog id="confirmation-dialog" #confirmationDialog class="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-lg border border-stone-200 bg-white p-0 text-stone-900 shadow-xl backdrop:bg-black/50 dark:border-neutral-800 dark:bg-neutral-900 dark:text-stone-100" (cancel)="onConfirmationDialogCancel($event)" (click)="onConfirmationDialogClick($event)">
+      @if (deletingMovie(); as movie) {
+        <section class="p-5 sm:p-6" aria-labelledby="delete-heading">
+          <h2 id="delete-heading" class="text-xl font-semibold">Remove “{{ movie.name }}”?</h2>
+          <p class="mt-2 text-base text-stone-600 dark:text-neutral-300">You can undo this for 5 seconds.</p>
+          @if (error()) { <p class="mt-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">{{ error() }}</p> }
+          <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button class="min-h-11 cursor-pointer rounded-md border border-stone-300 px-4 text-base font-medium hover:bg-stone-100 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="cancelDelete()">Cancel</button>
+            <button class="min-h-11 cursor-pointer rounded-md bg-red-700 px-4 text-base font-semibold text-white hover:bg-red-800" type="button" (click)="confirmDelete()">Remove movie</button>
+          </div>
+        </section>
+      } @else if (deletingWatchlistItem(); as item) {
+        <section class="p-5 sm:p-6" [attr.aria-labelledby]="'watchlist-delete-heading-' + item.id">
+          <h2 [id]="'watchlist-delete-heading-' + item.id" class="text-xl font-semibold">Remove “{{ item.name }}” from your watchlist?</h2>
+          <p class="mt-2 text-base text-stone-600 dark:text-neutral-300">This cannot be undone.</p>
+          @if (error()) { <p class="mt-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">{{ error() }}</p> }
+          <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button class="min-h-11 cursor-pointer rounded-md border border-stone-300 px-4 text-base font-medium hover:bg-stone-100 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="cancelRemoveWatchlistItem()">Cancel</button>
+            <button class="min-h-11 cursor-pointer rounded-md bg-red-700 px-4 text-base font-semibold text-white hover:bg-red-800" type="button" (click)="confirmRemoveWatchlistItem(item)">Remove title</button>
+          </div>
+        </section>
+      }
+    </dialog>
+
     @if (loading()) {
       <div class="mx-auto max-w-5xl px-5 py-16 text-base text-stone-600 dark:text-neutral-300" role="status">Loading movies…</div>
     } @else if (!user()) {
@@ -73,41 +222,6 @@
             <span>“{{ pending.movie.name }}” removed.</span>
             <button class="min-h-11 cursor-pointer rounded-md border border-stone-300 px-4 text-base font-medium hover:bg-stone-100 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="undoMovieDeletion()">Undo</button>
           </div>
-        }
-
-        @if (editorOpen() && !editingMovie()) {
-          <section class="movie-panel-enter mt-8 rounded-lg border border-stone-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900 sm:p-7" aria-labelledby="editor-heading">
-            <div class="flex items-start justify-between gap-4">
-              <div><h2 id="editor-heading" class="text-2xl font-semibold">{{ editingMovie() ? 'Edit movie' : 'Add a movie' }}</h2><p class="mt-1 text-base text-stone-600 dark:text-neutral-300">Title and release year are required.</p></div>
-            </div>
-            <form class="mt-5 grid grid-cols-[minmax(0,1fr)_5rem] gap-4" #movieForm="ngForm" (ngSubmit)="saveMovie()">
-              <label class="flex min-w-0 flex-col gap-2 text-base font-medium">Title
-                <input class="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="title" required maxlength="255" [(ngModel)]="title" placeholder="Movie title">
-              </label>
-              <label class="flex min-w-0 flex-col gap-2 text-base font-medium">Year
-                <input class="hide-number-spinner min-h-12 w-full min-w-0 appearance-none rounded-md border border-stone-300 bg-white px-3 text-base focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950" name="releaseYear" required type="number" min="1" max="9999" [(ngModel)]="releaseYear">
-              </label>
-              <div class="col-span-2">
-                <span class="mb-2 block text-base font-medium">Rating</span>
-                <div class="flex w-full overflow-hidden rounded-md border border-stone-300 dark:border-neutral-700" role="group" aria-label="Rating">
-                  @for (score of [10,9,8,7,6,5,4,3,2,1]; track score) {
-                    <button class="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center justify-center border-r border-stone-300 text-sm font-semibold last:border-r-0 dark:border-neutral-700 sm:text-base"
-                      type="button" (click)="rating = rating === score ? null : score" [attr.aria-label]="'Rating ' + score" [attr.aria-pressed]="rating === score"
-                      [style.background-color]="rating === score ? ratingColor(score) : ''"
-                      [style.color]="rating === score ? ratingTextColor(score) : ''"
-                      [class.bg-white]="rating !== score" [class.dark:bg-neutral-950]="rating !== score"
-                      [class.hover:bg-stone-100]="rating !== score" [class.dark:hover:bg-neutral-800]="rating !== score">
-                      {{ score }}
-                    </button>
-                  }
-                </div>
-              </div>
-              <div class="col-span-2 flex flex-wrap items-center justify-end gap-3">
-                <button class="min-h-12 cursor-pointer rounded-md border border-stone-300 px-5 text-base font-medium hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="closeEditor($event)">Cancel</button>
-                <button class="min-h-12 cursor-pointer rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700" type="submit" [disabled]="movieForm.invalid || saving()">{{ saving() ? 'Saving…' : editingMovie() ? 'Save changes' : 'Add movie' }}</button>
-              </div>
-            </form>
-          </section>
         }
 
         @if (saveConfirmation(); as confirmation) {
@@ -236,69 +350,20 @@
                   }
                 </button>
               </div>
+              <span class="w-10 shrink-0 text-center">Edit</span>
             </div>
             <div class="relative transition-opacity duration-150" [class.opacity-50]="loadingMovies()">
               <ul class="divide-y divide-stone-200 dark:divide-neutral-800">
                 @for (movie of visibleMovies(); track movie.id) {
-                  <li class="relative py-4 sm:py-5" data-movie-row>
-                  @if (deletingMovie()?.id === movie.id) {
-                    <section class="movie-panel-enter flex flex-col gap-4 rounded-lg border border-red-300 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-labelledby="delete-heading">
-                      <div><h2 id="delete-heading" class="text-lg font-semibold text-red-950 dark:text-red-100">Remove “{{ movie.name }}”?</h2><p class="mt-1 text-base text-red-900 dark:text-red-200">You can undo this for 5 seconds.</p></div>
-                      <div class="flex gap-3"><button class="min-h-11 cursor-pointer rounded-md border border-stone-300 px-4 text-base font-medium dark:border-neutral-700" type="button" (click)="cancelDelete($event)">Cancel</button><button class="min-h-11 cursor-pointer rounded-md bg-red-700 px-4 text-base font-semibold text-white hover:bg-red-800" type="button" (click)="confirmDelete()">Remove movie</button></div>
-                    </section>
-                  } @else if (editorOpen() && editingMovie()?.id === movie.id) {
-                    <section class="movie-panel-enter editor-panel rounded-lg border border-stone-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900 sm:p-6" aria-labelledby="inline-editor-heading">
-                        <div class="flex items-start justify-between gap-4">
-                          <h2 id="inline-editor-heading" class="text-xl font-semibold">Edit movie</h2>
-                        </div>
-                        <form class="mt-5 grid grid-cols-[minmax(0,1fr)_5rem] gap-4" #inlineMovieForm="ngForm" novalidate (ngSubmit)="saveMovie()">
-                          <label class="flex min-w-0 flex-col gap-2 text-base font-medium">Title
-                            <input class="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="title" required maxlength="255" [(ngModel)]="title" placeholder="Movie title">
-                            @if (inlineMovieForm.submitted && !title.trim()) { <span class="text-sm font-normal text-red-700 dark:text-red-300" role="alert">Enter a movie title.</span> }
-                          </label>
-                          <label class="flex min-w-0 flex-col gap-2 text-base font-medium">Year
-                            <input class="hide-number-spinner min-h-12 w-full min-w-0 appearance-none rounded-md border border-stone-300 bg-white px-3 text-base focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950" name="releaseYear" required type="number" min="1" max="9999" [(ngModel)]="releaseYear">
-                            @if (inlineMovieForm.submitted && (!releaseYear || releaseYear < 1 || releaseYear > 9999)) { <span class="text-sm font-normal text-red-700 dark:text-red-300" role="alert">Enter a valid release year.</span> }
-                          </label>
-                          <div class="col-span-2">
-                            <span class="mb-2 block text-base font-medium">Rating</span>
-                            <div class="flex w-full overflow-hidden rounded-md border border-stone-300 dark:border-neutral-700" role="group" aria-label="Rating">
-                              @for (score of [10,9,8,7,6,5,4,3,2,1]; track score) {
-                                <button class="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center justify-center border-r border-stone-300 text-sm font-semibold last:border-r-0 dark:border-neutral-700 sm:text-base"
-                                  type="button" (click)="rating = rating === score ? null : score" [attr.aria-label]="'Rating ' + score" [attr.aria-pressed]="rating === score"
-                                  [style.background-color]="rating === score ? ratingColor(score) : ''"
-                                  [style.color]="rating === score ? ratingTextColor(score) : ''"
-                                  [class.bg-white]="rating !== score" [class.dark:bg-neutral-950]="rating !== score"
-                                  [class.hover:bg-stone-100]="rating !== score" [class.dark:hover:bg-neutral-800]="rating !== score">
-                                  {{ score }}
-                                </button>
-                              }
-                            </div>
-                          </div>
-                          <div class="col-span-2 flex flex-wrap items-center justify-end gap-3">
-                            <button class="min-h-12 cursor-pointer rounded-md border border-stone-300 px-5 text-base font-medium hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="closeEditor($event)">Cancel</button>
-                            <button class="min-h-12 cursor-pointer rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700" type="submit" [disabled]="saving()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
-                          </div>
-                        </form>
-                    </section>
-                  } @else {
+                  <li class="py-4 sm:py-5" data-movie-row>
                   <div class="flex items-center gap-2 sm:gap-5">
-                    <button class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left disabled:cursor-not-allowed disabled:opacity-60 sm:gap-5" type="button" (click)="toggleMovieActions(movie.id)" [disabled]="pendingMovieDeletion() !== null" [attr.aria-expanded]="activeMovieActionsId() === movie.id" [attr.aria-label]="'Actions for ' + movie.name">
+                    <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-5">
                       <span class="min-w-0 flex-1 break-words text-lg font-semibold leading-snug sm:truncate sm:text-xl">{{ movie.name }}</span>
                       <span class="w-16 shrink-0 text-center text-base text-stone-600 dark:text-neutral-300">{{ movie.releaseYear }}</span>
-                      <span class="inline-flex min-w-20 w-fit shrink-0 items-center justify-center gap-1 rounded-md px-3 py-2 text-base font-semibold" [style.background-color]="ratingColor(movie.rating)" [style.color]="ratingTextColor(movie.rating)">{{ movie.rating === null ? 'Unrated' : movie.rating + ' / 10' }}</span>
-                    </button>
-                    @if (activeMovieActionsId() === movie.id) {
-                      <div class="movie-actions-enter absolute inset-0 z-10 flex items-center justify-center gap-2 bg-stone-50 px-3 dark:bg-neutral-950">
-                        <button class="absolute inset-0 cursor-pointer" type="button" aria-label="Close movie actions" (click)="toggleMovieActions(movie.id)"></button>
-                        <div class="relative z-10 flex gap-2">
-                          <button class="min-h-11 cursor-pointer rounded-md border border-stone-300 bg-white px-4 text-base font-medium text-stone-700 hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800" type="button" (click)="openEditForm(movie, $event)" [attr.aria-label]="'Edit ' + movie.name">Edit</button>
-                          <button class="min-h-11 cursor-pointer rounded-md bg-red-700 px-4 text-base font-medium text-white hover:bg-red-800 focus-visible:outline-2 focus-visible:outline-red-700" type="button" (click)="requestDelete(movie, $event)" [attr.aria-label]="'Remove ' + movie.name">Remove</button>
-                        </div>
-                      </div>
-                    }
+                    </div>
+                    <span class="inline-flex min-w-20 w-fit shrink-0 items-center justify-center gap-1 rounded-md px-3 py-2 text-base font-semibold" [style.background-color]="ratingColor(movie.rating)" [style.color]="ratingTextColor(movie.rating)">{{ movie.rating === null ? 'Unrated' : movie.rating + ' / 10' }}</span>
+                    <button class="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-md border border-stone-300 bg-white hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800" type="button" (click)="openEditForm(movie)" [disabled]="pendingMovieDeletion() !== null" [attr.aria-label]="'Edit ' + movie.name"><svg lucidePencil class="size-4" aria-hidden="true"></svg></button>
                   </div>
-                  }
                   </li>
                 }
               </ul>
@@ -331,42 +396,6 @@
             </div>
           }
 
-          @if (watchlistEditorOpen()) {
-            <section class="movie-panel-enter mt-8 rounded-lg border border-stone-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900 sm:p-7" aria-labelledby="watchlist-editor-heading">
-              <h2 id="watchlist-editor-heading" class="text-2xl font-semibold">Add to your watchlist</h2>
-              <form class="mt-5 flex flex-col gap-4" #watchlistForm="ngForm" (ngSubmit)="saveWatchlistItem()">
-                <label class="flex min-w-0 flex-col gap-2 text-base font-medium">Title
-                  <input class="min-h-12 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="watchlistTitle" required maxlength="255" [(ngModel)]="watchlistTitle" placeholder="Movie title">
-                </label>
-                <fieldset class="flex flex-col gap-3">
-                  <legend class="mb-2 block text-sm font-medium">Priority</legend>
-                  <div class="inline-flex min-h-12 w-full gap-2 sm:w-72" role="group" aria-label="Priority">
-                    <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600 hover:bg-sky-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-sky-900"
-                      type="button" (click)="watchlistPriority = 'HIGH'" [attr.aria-pressed]="watchlistPriority === 'HIGH'"
-                      [class.bg-sky-100]="watchlistPriority === 'HIGH'" [class.text-sky-900]="watchlistPriority === 'HIGH'"
-                      [class.dark:bg-sky-950]="watchlistPriority === 'HIGH'" [class.dark:text-sky-100]="watchlistPriority === 'HIGH'"><svg lucideArrowUp class="size-4" aria-hidden="true"></svg>High</button>
-                    <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600 hover:bg-indigo-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-indigo-900"
-                      type="button" (click)="watchlistPriority = 'MEDIUM'" [attr.aria-pressed]="watchlistPriority === 'MEDIUM'"
-                      [class.bg-indigo-100]="watchlistPriority === 'MEDIUM'" [class.text-indigo-900]="watchlistPriority === 'MEDIUM'"
-                      [class.dark:bg-indigo-950]="watchlistPriority === 'MEDIUM'" [class.dark:text-indigo-100]="watchlistPriority === 'MEDIUM'"><svg lucideMinus class="size-4" aria-hidden="true"></svg>Medium</button>
-                    <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600 hover:bg-purple-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-purple-900"
-                      type="button" (click)="watchlistPriority = 'LOW'" [attr.aria-pressed]="watchlistPriority === 'LOW'"
-                      [class.bg-purple-100]="watchlistPriority === 'LOW'" [class.text-purple-900]="watchlistPriority === 'LOW'"
-                      [class.dark:bg-purple-950]="watchlistPriority === 'LOW'" [class.dark:text-purple-100]="watchlistPriority === 'LOW'"><svg lucideArrowDown class="size-4" aria-hidden="true"></svg>Low</button>
-                  </div>
-                </fieldset>
-                <label class="flex min-w-0 flex-1 flex-col gap-2 text-base font-medium">Notes (optional)
-                  <textarea class="min-h-12 resize-y rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-normal text-stone-900 placeholder:text-stone-400 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="watchlistNotes" maxlength="500" rows="2" [(ngModel)]="watchlistNotes" placeholder="Why you want to watch it"></textarea>
-                  <span class="text-right text-xs font-normal text-stone-500 dark:text-neutral-400">{{ watchlistNotes.length }}/500</span>
-                </label>
-                <div class="flex justify-end gap-3">
-                  <button class="min-h-12 cursor-pointer rounded-md border border-stone-300 px-5 text-base font-medium hover:bg-stone-100 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="watchlistEditorOpen.set(false)">Cancel</button>
-                  <button class="min-h-12 cursor-pointer rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50" type="submit" [disabled]="watchlistForm.invalid || savingWatchlistItem()">{{ savingWatchlistItem() ? 'Saving…' : 'Add title' }}</button>
-                </div>
-              </form>
-            </section>
-          }
-
           <section class="mt-9" aria-label="Watchlist">
             @if (watchlistLoading() && !watchlist().length) {
               <p class="py-10 text-center text-base text-stone-600 dark:text-neutral-300" role="status">Loading watchlist…</p>
@@ -374,43 +403,6 @@
               <ul class="divide-y divide-stone-200 border-t border-stone-200 dark:divide-neutral-800 dark:border-neutral-800">
                 @for (item of watchlist(); track item.id) {
                   <li class="py-4 sm:py-5">
-                    @if (deletingWatchlistItemId() === item.id) {
-                      <section class="movie-panel-enter flex flex-col gap-4 rounded-lg border border-red-300 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950 sm:flex-row sm:items-center sm:justify-between sm:p-5" [attr.aria-labelledby]="'watchlist-delete-heading-' + item.id">
-                        <div><h2 [id]="'watchlist-delete-heading-' + item.id" class="text-lg font-semibold text-red-950 dark:text-red-100">Remove “{{ item.name }}” from your watchlist?</h2><p class="mt-1 text-base text-red-900 dark:text-red-200">This cannot be undone.</p></div>
-                        <div class="flex gap-3"><button class="min-h-11 cursor-pointer rounded-md border border-stone-300 px-4 text-base font-medium hover:bg-stone-100 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="cancelRemoveWatchlistItem()">Cancel</button><button class="min-h-11 cursor-pointer rounded-md bg-red-700 px-4 text-base font-semibold text-white hover:bg-red-800" type="button" (click)="confirmRemoveWatchlistItem(item)">Remove title</button></div>
-                      </section>
-                    } @else if (editingWatchlistItemId() === item.id) {
-                      <form class="flex flex-col gap-4 rounded-lg border border-stone-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900 sm:p-5" (ngSubmit)="saveWatchlistEdit(item)">
-                        <label class="flex min-w-0 flex-col gap-2 text-sm font-medium">Title
-                          <input class="min-h-11 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 text-base dark:border-neutral-700 dark:bg-neutral-950" name="editWatchlistTitle" required maxlength="255" [(ngModel)]="editingWatchlistTitle">
-                        </label>
-                        <fieldset class="flex flex-col gap-3">
-                          <legend class="mb-2 block text-sm font-medium">Priority</legend>
-                          <div class="inline-flex min-h-11 w-full gap-2 sm:w-72" role="group" aria-label="Priority">
-                            <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600 hover:bg-sky-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-sky-900"
-                              type="button" (click)="editingWatchlistPriority = 'HIGH'" [attr.aria-pressed]="editingWatchlistPriority === 'HIGH'"
-                              [class.bg-sky-100]="editingWatchlistPriority === 'HIGH'" [class.text-sky-900]="editingWatchlistPriority === 'HIGH'"
-                              [class.dark:bg-sky-950]="editingWatchlistPriority === 'HIGH'" [class.dark:text-sky-100]="editingWatchlistPriority === 'HIGH'"><svg lucideArrowUp class="size-4" aria-hidden="true"></svg>High</button>
-                            <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600 hover:bg-indigo-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-indigo-900"
-                              type="button" (click)="editingWatchlistPriority = 'MEDIUM'" [attr.aria-pressed]="editingWatchlistPriority === 'MEDIUM'"
-                              [class.bg-indigo-100]="editingWatchlistPriority === 'MEDIUM'" [class.text-indigo-900]="editingWatchlistPriority === 'MEDIUM'"
-                              [class.dark:bg-indigo-950]="editingWatchlistPriority === 'MEDIUM'" [class.dark:text-indigo-100]="editingWatchlistPriority === 'MEDIUM'"><svg lucideMinus class="size-4" aria-hidden="true"></svg>Medium</button>
-                            <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600 hover:bg-purple-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-purple-900"
-                              type="button" (click)="editingWatchlistPriority = 'LOW'" [attr.aria-pressed]="editingWatchlistPriority === 'LOW'"
-                              [class.bg-purple-100]="editingWatchlistPriority === 'LOW'" [class.text-purple-900]="editingWatchlistPriority === 'LOW'"
-                              [class.dark:bg-purple-950]="editingWatchlistPriority === 'LOW'" [class.dark:text-purple-100]="editingWatchlistPriority === 'LOW'"><svg lucideArrowDown class="size-4" aria-hidden="true"></svg>Low</button>
-                          </div>
-                        </fieldset>
-                        <label class="flex flex-col gap-2 text-sm font-medium">Notes (optional)
-                          <textarea class="min-h-20 resize-y rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-normal dark:border-neutral-700 dark:bg-neutral-950" name="editWatchlistNotes" maxlength="500" rows="3" [(ngModel)]="editingWatchlistNotes"></textarea>
-                          <span class="text-right text-xs font-normal text-stone-500 dark:text-neutral-400">{{ editingWatchlistNotes.length }}/500</span>
-                        </label>
-                        <div class="flex justify-end gap-2">
-                          <button class="min-h-11 cursor-pointer rounded-md border border-stone-300 px-4 text-sm font-medium hover:bg-stone-100 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="cancelWatchlistEdit()">Cancel</button>
-                          <button class="min-h-11 cursor-pointer rounded-md bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50" type="submit" [disabled]="!editingWatchlistTitle.trim() || savingWatchlistItem()">{{ savingWatchlistItem() ? 'Saving…' : 'Save' }}</button>
-                        </div>
-                      </form>
-                    } @else {
                       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div class="min-w-0">
                           <div class="flex flex-wrap items-center gap-2">
@@ -443,7 +435,6 @@
                           <button class="min-h-11 cursor-pointer rounded-md border border-stone-300 px-4 text-sm font-medium hover:bg-stone-100 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="requestRemoveWatchlistItem(item)" [attr.aria-label]="'Remove ' + item.name + ' from watchlist'">Remove</button>
                         </div>
                       </div>
-                    }
                   </li>
                 }
               </ul>

@@ -1,4 +1,4 @@
-import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Title } from '@angular/platform-browser';
@@ -10,6 +10,7 @@ import {
   LucideDownload,
   LucideMinus,
   LucideMoon,
+  LucidePencil,
   LucidePlus,
   LucideSearch,
   LucideSun,
@@ -53,6 +54,7 @@ function isMovieSort(value: unknown): value is MovieSort {
     LucideDownload,
     LucideMinus,
     LucideMoon,
+    LucidePencil,
     LucidePlus,
     LucideSearch,
     LucideSun,
@@ -92,8 +94,11 @@ export class App implements OnDestroy {
   readonly saveConfirmationFading = signal(false);
   readonly deletingMovie = signal<Movie | null>(null);
   readonly pendingMovieDeletion = signal<PendingMovieDeletion | null>(null);
-  readonly activeMovieActionsId = signal<number | null>(null);
   readonly theme = signal<Theme>(this.readThemePreference());
+  readonly editingWatchlistItem = computed(() =>
+    this.watchlist().find(item => item.id === this.editingWatchlistItemId()) ?? null);
+  readonly deletingWatchlistItem = computed(() =>
+    this.watchlist().find(item => item.id === this.deletingWatchlistItemId()) ?? null);
 
   title = '';
   watchlistTitle = '';
@@ -107,6 +112,8 @@ export class App implements OnDestroy {
 
   readonly visibleMovies = computed(() => this.movies());
 
+  @ViewChild('editorDialog') private editorDialog?: ElementRef<HTMLDialogElement>;
+  @ViewChild('confirmationDialog') private confirmationDialog?: ElementRef<HTMLDialogElement>;
   private readonly pageSize = 50;
   private requestId = 0;
   private watchlistRequestId = 0;
@@ -156,10 +163,7 @@ export class App implements OnDestroy {
     try {
       if (this.pendingMovieDeletion() && !await this.commitPendingMovieDeletion()) return;
       await this.api.logout();
-      this.user.set(null);
-      this.movies.set([]);
-      this.watchlist.set([]);
-      this.totalItems.set(0);
+      this.clearAuthenticatedState();
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Could not sign out. Please try again.'));
     }
@@ -184,12 +188,15 @@ export class App implements OnDestroy {
   }
 
   openCreateForm(): void {
+    this.error.set('');
     this.pendingWatchlistItemId.set(null);
     this.editingMovie.set(null);
+    this.deletingMovie.set(null);
     this.title = '';
     this.releaseYear = new Date().getFullYear();
     this.rating = null;
     this.editorOpen.set(true);
+    this.showDialog(this.editorDialog?.nativeElement);
   }
 
   selectTab(tab: 'movies' | 'watchlist'): void {
@@ -200,10 +207,13 @@ export class App implements OnDestroy {
   }
 
   openWatchlistForm(): void {
+    this.error.set('');
     this.watchlistTitle = '';
     this.watchlistNotes = '';
     this.watchlistPriority = 'MEDIUM';
+    this.editingWatchlistItemId.set(null);
     this.watchlistEditorOpen.set(true);
+    this.showDialog(this.editorDialog?.nativeElement);
   }
 
   async saveWatchlistItem(): Promise<void> {
@@ -216,10 +226,7 @@ export class App implements OnDestroy {
       const item = await this.api.addWatchlistItem(
         name, this.watchlistNotes.trim(), this.watchlistPriority);
       this.watchlist.update(items => [...items, item].sort((a, b) => a.name.localeCompare(b.name)));
-      this.watchlistEditorOpen.set(false);
-      this.watchlistTitle = '';
-      this.watchlistNotes = '';
-      this.watchlistPriority = 'MEDIUM';
+      this.dismissWatchlistEditor();
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Could not add the title to your watchlist. Please try again.'));
     } finally {
@@ -228,17 +235,35 @@ export class App implements OnDestroy {
   }
 
   openWatchlistEdit(item: WatchlistItem): void {
+    this.error.set('');
+    this.watchlistEditorOpen.set(false);
     this.editingWatchlistItemId.set(item.id);
     this.editingWatchlistTitle = item.name;
     this.editingWatchlistNotes = item.notes ?? '';
     this.editingWatchlistPriority = item.priority;
+    this.showDialog(this.editorDialog?.nativeElement);
   }
 
   cancelWatchlistEdit(): void {
+    if (this.savingWatchlistItem()) return;
+    this.dismissWatchlistEditor();
+  }
+
+  closeWatchlistForm(): void {
+    if (this.savingWatchlistItem()) return;
+    this.dismissWatchlistEditor();
+  }
+
+  private dismissWatchlistEditor(): void {
+    this.watchlistEditorOpen.set(false);
     this.editingWatchlistItemId.set(null);
+    this.watchlistTitle = '';
+    this.watchlistNotes = '';
+    this.watchlistPriority = 'MEDIUM';
     this.editingWatchlistTitle = '';
     this.editingWatchlistNotes = '';
     this.editingWatchlistPriority = 'MEDIUM';
+    this.hideDialog(this.editorDialog?.nativeElement);
   }
 
   async saveWatchlistEdit(item: WatchlistItem): Promise<void> {
@@ -253,7 +278,7 @@ export class App implements OnDestroy {
       this.watchlist.update(items => items
         .map(current => current.id === item.id ? updated : current)
         .sort((a, b) => a.name.localeCompare(b.name)));
-      this.cancelWatchlistEdit();
+      this.dismissWatchlistEditor();
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Could not update the watchlist item. Please try again.'));
     } finally {
@@ -262,12 +287,15 @@ export class App implements OnDestroy {
   }
 
   requestRemoveWatchlistItem(item: WatchlistItem): void {
+    this.error.set('');
     this.cancelWatchlistEdit();
     this.deletingWatchlistItemId.set(item.id);
+    this.showDialog(this.confirmationDialog?.nativeElement);
   }
 
   cancelRemoveWatchlistItem(): void {
     this.deletingWatchlistItemId.set(null);
+    this.hideDialog(this.confirmationDialog?.nativeElement);
   }
 
   async confirmRemoveWatchlistItem(item: WatchlistItem): Promise<void> {
@@ -275,7 +303,8 @@ export class App implements OnDestroy {
     try {
       await this.api.deleteWatchlistItem(item.id);
       this.watchlist.update(items => items.filter(current => current.id !== item.id));
-      this.cancelRemoveWatchlistItem();
+      this.deletingWatchlistItemId.set(null);
+      this.hideDialog(this.confirmationDialog?.nativeElement);
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Could not remove the title from your watchlist. Please try again.'));
     }
@@ -286,6 +315,7 @@ export class App implements OnDestroy {
   }
 
   markWatchlistItemSeen(item: WatchlistItem): void {
+    this.error.set('');
     this.selectTab('movies');
     this.pendingWatchlistItemId.set(item.id);
     this.editingMovie.set(null);
@@ -294,37 +324,35 @@ export class App implements OnDestroy {
     this.releaseYear = new Date().getFullYear();
     this.rating = null;
     this.editorOpen.set(true);
+    this.showDialog(this.editorDialog?.nativeElement);
   }
 
-  openEditForm(movie: Movie, event?: Event): void {
-    this.transitionMovieRow(event, () => {
-      this.activeMovieActionsId.set(null);
-      this.deletingMovie.set(null);
-      this.editingMovie.set(movie);
-      this.title = movie.name;
-      this.releaseYear = movie.releaseYear;
-      this.rating = movie.rating;
-      this.editorOpen.set(true);
-    });
+  openEditForm(movie: Movie): void {
+    this.error.set('');
+    this.deletingMovie.set(null);
+    this.editingMovie.set(movie);
+    this.title = movie.name;
+    this.releaseYear = movie.releaseYear;
+    this.rating = movie.rating;
+    this.editorOpen.set(true);
+    this.showDialog(this.editorDialog?.nativeElement);
   }
 
-  requestDelete(movie: Movie, event?: Event): void {
+  requestDelete(movie: Movie): void {
     if (this.pendingMovieDeletion()) return;
-    this.transitionMovieRow(event, () => {
-      this.activeMovieActionsId.set(null);
+    this.error.set('');
+    if (this.editingMovie()?.id !== movie.id || !this.editorOpen()) {
       this.editingMovie.set(null);
       this.editorOpen.set(false);
-      this.deletingMovie.set(movie);
-    });
+      this.hideDialog(this.editorDialog?.nativeElement);
+    }
+    this.deletingMovie.set(movie);
+    this.showDialog(this.confirmationDialog?.nativeElement);
   }
 
-  cancelDelete(event?: Event): void {
-    this.transitionMovieRow(event, () => this.deletingMovie.set(null));
-  }
-
-  toggleMovieActions(movieId: number): void {
-    if (this.pendingMovieDeletion()) return;
-    this.activeMovieActionsId.update(current => current === movieId ? null : movieId);
+  cancelDelete(): void {
+    this.deletingMovie.set(null);
+    this.hideDialog(this.confirmationDialog?.nativeElement);
   }
 
   onQueryChange(value: string): void {
@@ -417,72 +445,57 @@ export class App implements OnDestroy {
     if (this.hasNext() && !this.loadingMore()) void this.loadMovies(false);
   }
 
-  closeEditor(event?: Event): void {
+  closeEditor(): void {
     if (this.saving()) return;
-
-    if (!this.editingMovie()) {
-      this.editorOpen.set(false);
-      this.pendingWatchlistItemId.set(null);
-      return;
-    }
-
-    const target = event?.target;
-    const panel = target instanceof Element ? target.closest<HTMLElement>('.editor-panel') : null;
-    if (panel && typeof panel.animate === 'function' && !this.prefersReducedMotion()) {
-      const animation = panel.animate(
-        [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.96)' }],
-        { duration: 140, easing: 'ease-in', fill: 'forwards' },
-      );
-      animation.onfinish = () => this.collapseEditorRow(event);
-      return;
-    }
-
-    this.collapseEditorRow(event);
+    this.dismissMovieEditor();
   }
 
-  private collapseEditorRow(event?: Event): void {
-    this.transitionMovieRow(event, () => {
-      this.editorOpen.set(false);
-      this.editingMovie.set(null);
-      this.pendingWatchlistItemId.set(null);
+  onEditorDialogCancel(event: Event): void {
+    event.preventDefault();
+    if (this.editorOpen()) this.closeEditor();
+    else if (this.watchlistEditorOpen()) this.closeWatchlistForm();
+    else if (this.editingWatchlistItemId() !== null) this.cancelWatchlistEdit();
+  }
+
+  onEditorDialogClick(event: MouseEvent): void {
+    if (event.target !== event.currentTarget) return;
+    if (this.editorOpen()) this.closeEditor();
+    else if (this.watchlistEditorOpen()) this.closeWatchlistForm();
+    else if (this.editingWatchlistItemId() !== null) this.cancelWatchlistEdit();
+  }
+
+  onConfirmationDialogCancel(event: Event): void {
+    event.preventDefault();
+    if (this.deletingMovie()) this.cancelDelete();
+    else this.cancelRemoveWatchlistItem();
+  }
+
+  onConfirmationDialogClick(event: MouseEvent): void {
+    if (event.target !== event.currentTarget) return;
+    if (this.deletingMovie()) this.cancelDelete();
+    else this.cancelRemoveWatchlistItem();
+  }
+
+  private dismissMovieEditor(): void {
+    this.editorOpen.set(false);
+    this.editingMovie.set(null);
+    this.pendingWatchlistItemId.set(null);
+    this.hideDialog(this.editorDialog?.nativeElement);
+  }
+
+  private showDialog(dialog: HTMLDialogElement | undefined): void {
+    if (!dialog || dialog.open) return;
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+    queueMicrotask(() => {
+      if (dialog.open) dialog.querySelector<HTMLElement>('[autofocus]')?.focus();
     });
   }
 
-  private prefersReducedMotion(): boolean {
-    return typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  }
-
-  private transitionMovieRow(event: Event | undefined, update: () => void): void {
-    const target = event?.target;
-    const row = target instanceof Element ? target.closest<HTMLElement>('[data-movie-row]') : null;
-    if (!row || typeof requestAnimationFrame !== 'function' || typeof row.animate !== 'function' || this.prefersReducedMotion()) {
-      update();
-      return;
-    }
-
-    const startHeight = row.getBoundingClientRect().height;
-    row.style.height = `${startHeight}px`;
-    row.style.overflow = 'hidden';
-    update();
-
-    requestAnimationFrame(() => {
-      if (!row.isConnected) return;
-      row.style.height = 'auto';
-      const endHeight = row.getBoundingClientRect().height;
-      row.style.height = `${startHeight}px`;
-      void row.offsetHeight;
-
-      const animation = row.animate(
-        [{ height: `${startHeight}px` }, { height: `${endHeight}px` }],
-        { duration: 180, easing: 'ease-in-out' },
-      );
-      animation.onfinish = () => {
-        row.style.height = '';
-        row.style.overflow = '';
-      };
-    });
+  private hideDialog(dialog: HTMLDialogElement | undefined): void {
+    if (!dialog?.open) return;
+    if (typeof dialog.showModal === 'function' && typeof dialog.close === 'function') dialog.close();
+    else dialog.removeAttribute('open');
   }
 
   async saveMovie(): Promise<void> {
@@ -502,8 +515,7 @@ export class App implements OnDestroy {
       else await this.api.createMovie(movie, this.pendingWatchlistItemId() ?? undefined);
       const watchlistItemId = current ? null : this.pendingWatchlistItemId();
 
-      this.editorOpen.set(false);
-      this.pendingWatchlistItemId.set(null);
+      this.dismissMovieEditor();
       this.clearSaveConfirmationTimers();
       this.saveConfirmationFading.set(false);
       this.saveConfirmation.set({
@@ -555,7 +567,8 @@ export class App implements OnDestroy {
 
     this.error.set('');
     const index = this.movies().findIndex(current => current.id === movie.id);
-    this.deletingMovie.set(null);
+    this.cancelDelete();
+    if (this.editingMovie()?.id === movie.id) this.dismissMovieEditor();
     if (index >= 0) {
       this.movies.update(current => current.filter(item => item.id !== movie.id));
       this.totalItems.update(count => Math.max(0, count - 1));
@@ -778,7 +791,7 @@ export class App implements OnDestroy {
 
   private handleSessionError(error: unknown): void {
     if (error instanceof HttpErrorResponse && error.status === 401) {
-      this.user.set(null);
+      this.clearAuthenticatedState();
       return;
     }
     if (error instanceof HttpErrorResponse && error.status === 403) {
@@ -791,13 +804,40 @@ export class App implements OnDestroy {
   private errorMessage(error: unknown, fallback: string, badRequestMessage = fallback): string {
     if (!(error instanceof HttpErrorResponse)) return fallback;
     if (error.status === 401) {
-      this.user.set(null);
+      this.clearAuthenticatedState();
       return 'Your session expired. Sign in again to continue.';
     }
     if (error.status === 400) return badRequestMessage;
     if (error.status === 409) return 'That title is already in your collection or watchlist.';
     if (error.status === 403) return 'This action was denied. Reload the page and try again.';
     return fallback;
+  }
+
+  private clearAuthenticatedState(): void {
+    this.user.set(null);
+    this.movies.set([]);
+    this.watchlist.set([]);
+    this.totalItems.set(0);
+    this.editorOpen.set(false);
+    this.editingMovie.set(null);
+    this.pendingWatchlistItemId.set(null);
+    this.watchlistEditorOpen.set(false);
+    this.editingWatchlistItemId.set(null);
+    this.deletingMovie.set(null);
+    this.deletingWatchlistItemId.set(null);
+    this.pendingMovieDeletion.set(null);
+    this.saveConfirmation.set(null);
+    this.clearPendingMovieDeleteTimer();
+    this.clearSaveConfirmationTimers();
+    if (this.queryTimer !== null) clearTimeout(this.queryTimer);
+    this.queryTimer = null;
+    this.requestId += 1;
+    this.watchlistRequestId += 1;
+    this.loadingMovies.set(false);
+    this.loadingMore.set(false);
+    this.watchlistLoading.set(false);
+    this.hideDialog(this.editorDialog?.nativeElement);
+    this.hideDialog(this.confirmationDialog?.nativeElement);
   }
 
   private readThemePreference(): Theme {

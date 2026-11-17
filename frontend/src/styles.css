@@ -125,17 +125,8 @@ button:focus, a:focus, input:focus, select:focus, textarea:focus {
   }
 }
 
-@keyframes movie-actions-enter {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 .movie-panel-enter {
   animation: movie-panel-enter 160ms ease-out both;
-}
-
-.movie-actions-enter {
-  animation: movie-actions-enter 120ms ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -143,8 +134,7 @@ button:focus, a:focus, input:focus, select:focus, textarea:focus {
     transition-duration: 0ms;
   }
 
-  .movie-panel-enter,
-  .movie-actions-enter {
+  .movie-panel-enter {
     animation: none;
   }
 }
