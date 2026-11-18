@@ -22,6 +22,7 @@ This repository contains a movie application with a Spring Boot REST API and an 
 
 ## Useful commands
 
+- Local development stack: `./dev.sh` (checks/starts PostgreSQL, then runs backend and frontend)
 - Backend tests: `cd backend && ./mvnw test`
 - Backend run: `cd backend && ./mvnw spring-boot:run`
 - Frontend dev server: `cd frontend && npm start`

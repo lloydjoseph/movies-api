@@ -18,38 +18,25 @@ cp -n backend/.env.example backend/.env
 
 Set `DB_PASSWORD` to the password used by your local PostgreSQL volume. For Google sign-in, set `GOOGLE_OAUTH_ENABLED=true`, add your Google OAuth client ID and secret, and include your verified Google email in `APP_ALLOWED_GOOGLE_EMAILS`. Keep `backend/.env` private; it is ignored by Git.
 
+Alternatively, export `DB_PASSWORD` in your shell startup file; the launcher accepts that instead of `backend/.env`. Export any Google OAuth settings there as well if you use sign-in.
+
 In Google Cloud, add this local redirect URI to the OAuth client:
 
 ```text
 http://localhost:8080/login/oauth2/code/google
 ```
 
-### 2. Start PostgreSQL
+Install frontend dependencies once with `(cd frontend && npm ci)`.
+
+### 2. Start the app
+
+From the repository root, run:
 
 ```bash
-cd backend
-docker compose up -d postgres
+./dev.sh
 ```
 
-### 3. Start the backend
-
-In a terminal from `backend/`:
-
-```bash
-SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
-```
-
-Liquibase applies database migrations at startup. The API is available at <http://localhost:8080>.
-
-### 4. Start the frontend
-
-In another terminal:
-
-```bash
-cd frontend
-npm ci
-npm start
-```
+The command checks PostgreSQL readiness and starts the database if needed, then starts the backend and frontend. Press `Ctrl-C` to stop both app servers; PostgreSQL remains running. The backend is at <http://localhost:8080> and the frontend is at <http://localhost:4200>. Liquibase applies database migrations at backend startup.
 
 Open <http://localhost:4200>, sign in with an allowlisted Google account, and manage your catalog. The Angular development server proxies API and sign-in requests to the backend.
 
