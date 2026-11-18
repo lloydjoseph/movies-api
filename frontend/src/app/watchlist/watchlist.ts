@@ -34,6 +34,8 @@ export class WatchlistComponent implements OnChanges {
     this.items().find(item => item.id === this.deletingItemId()) ?? null);
 
   title = '';
+  releaseYear: number | null = null;
+  editingReleaseYear: number | null = null;
   lookupResultsVisible = false;
   notes = '';
   priority: WatchlistPriority = 'MEDIUM';
@@ -73,6 +75,7 @@ export class WatchlistComponent implements OnChanges {
   openAddForm(): void {
     this.error.set('');
     this.title = '';
+    this.releaseYear = null;
     this.lookupResultsVisible = false;
     this.notes = '';
     this.priority = 'MEDIUM';
@@ -83,17 +86,20 @@ export class WatchlistComponent implements OnChanges {
 
   onMovieLookupSelected(movie: MovieLookupResult): void {
     this.title = movie.title;
+    this.releaseYear = movie.releaseYear;
     this.lookupResultsVisible = false;
   }
 
   async saveNewItem(): Promise<void> {
     const name = this.title.trim();
-    if (!name || this.saving()) return;
+    if (!name || this.saving() || !this.isValidReleaseYear(this.releaseYear)) return;
 
     this.saving.set(true);
     this.error.set('');
     try {
-      const item = await this.api.addWatchlistItem(name, this.notes.trim(), this.priority);
+      const item = this.releaseYear === null
+        ? await this.api.addWatchlistItem(name, this.notes.trim(), this.priority)
+        : await this.api.addWatchlistItem(name, this.notes.trim(), this.priority, this.releaseYear);
       this.items.update(items => [...items, item].sort((a, b) => a.name.localeCompare(b.name)));
       this.dismissEditor();
     } catch (error) {
@@ -108,6 +114,7 @@ export class WatchlistComponent implements OnChanges {
     this.addEditorOpen.set(false);
     this.editingItemId.set(item.id);
     this.editingTitle = item.name;
+    this.editingReleaseYear = item.releaseYear ?? null;
     this.editingNotes = item.notes ?? '';
     this.editingPriority = item.priority;
     this.showDialog(this.editorDialog?.nativeElement);
@@ -125,13 +132,15 @@ export class WatchlistComponent implements OnChanges {
 
   async saveEdit(item: WatchlistItem): Promise<void> {
     const name = this.editingTitle.trim();
-    if (!name || this.saving()) return;
+    if (!name || this.saving() || !this.isValidReleaseYear(this.editingReleaseYear)) return;
 
     this.saving.set(true);
     this.error.set('');
     try {
-      const updated = await this.api.updateWatchlistItem(
-        item.id, name, this.editingNotes.trim(), this.editingPriority);
+      const updated = this.editingReleaseYear === null
+        ? await this.api.updateWatchlistItem(item.id, name, this.editingNotes.trim(), this.editingPriority)
+        : await this.api.updateWatchlistItem(
+          item.id, name, this.editingNotes.trim(), this.editingPriority, this.editingReleaseYear);
       this.items.update(items => items
         .map(current => current.id === item.id ? updated : current)
         .sort((a, b) => a.name.localeCompare(b.name)));
@@ -181,6 +190,10 @@ export class WatchlistComponent implements OnChanges {
     return priority.charAt(0) + priority.slice(1).toLowerCase();
   }
 
+  isValidReleaseYear(year: number | null): boolean {
+    return year === null || (Number.isInteger(year) && year >= 1 && year <= 9999);
+  }
+
   onEditorDialogCancel(event: Event): void {
     event.preventDefault();
     if (this.addEditorOpen()) this.closeAddForm();
@@ -206,9 +219,11 @@ export class WatchlistComponent implements OnChanges {
     this.addEditorOpen.set(false);
     this.editingItemId.set(null);
     this.title = '';
+    this.releaseYear = null;
     this.notes = '';
     this.priority = 'MEDIUM';
     this.editingTitle = '';
+    this.editingReleaseYear = null;
     this.editingNotes = '';
     this.editingPriority = 'MEDIUM';
     this.hideDialog(this.editorDialog?.nativeElement);

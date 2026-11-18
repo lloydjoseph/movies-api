@@ -42,6 +42,7 @@ public class WatchlistServiceImpl implements WatchlistService {
 
         WatchlistItem item = repository.save(WatchlistItem.builder()
                 .name(name)
+                .releaseYear(request.releaseYear())
                 .notes(normalizeNotes(request.notes()))
                 .priority(request.priority() == null ? WatchlistPriority.MEDIUM : request.priority())
                 .account(account)
@@ -59,6 +60,7 @@ public class WatchlistServiceImpl implements WatchlistService {
             throw duplicateTitle();
         }
         item.setName(name);
+        item.setReleaseYear(request.releaseYear());
         item.setNotes(normalizeNotes(request.notes()));
         if (request.priority() != null) item.setPriority(request.priority());
         return toDto(repository.save(item));
@@ -82,6 +84,6 @@ public class WatchlistServiceImpl implements WatchlistService {
     }
 
     private WatchlistItemDto toDto(WatchlistItem item) {
-        return new WatchlistItemDto(item.getId(), item.getName(), item.getNotes(), item.getPriority());
+        return new WatchlistItemDto(item.getId(), item.getName(), item.getReleaseYear(), item.getNotes(), item.getPriority());
     }
 }

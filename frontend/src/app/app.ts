@@ -152,7 +152,7 @@ export class App implements OnDestroy {
     this.pendingWatchlistItemId.set(item.id);
     this.editingMovie.set(null);
     this.title = item.name;
-    this.releaseYear = new Date().getFullYear();
+    this.releaseYear = item.releaseYear ?? null;
     this.rating = null;
     this.editorOpen.set(true);
     this.showDialog(this.editorDialog?.nativeElement);

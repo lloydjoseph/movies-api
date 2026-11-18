@@ -29,6 +29,9 @@ public class WatchlistItem {
     @Column(nullable = false, length = 255)
     private String name;
 
+    @Column(name = "release_year")
+    private Integer releaseYear;
+
     @Column(length = 500)
     private String notes;
 

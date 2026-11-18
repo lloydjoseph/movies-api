@@ -162,4 +162,15 @@
             </column>
         </addColumn>
     </changeSet>
+
+    <changeSet id="012-add-watchlist-release-year" author="movies-api">
+        <addColumn tableName="watchlist_item">
+            <column name="release_year" type="INT"/>
+        </addColumn>
+        <sql>
+            ALTER TABLE watchlist_item
+                ADD CONSTRAINT ck_watchlist_item_release_year_positive
+                CHECK (release_year IS NULL OR release_year BETWEEN 1 AND 9999)
+        </sql>
+    </changeSet>
 </databaseChangeLog>
