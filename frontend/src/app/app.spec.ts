@@ -256,6 +256,7 @@ describe('App', () => {
     fixture.detectChanges();
     const watchlistEditor = rendered.querySelector<HTMLElement>('dialog[open] [aria-labelledby="watchlist-editor-heading"]');
     expect(watchlistEditor).not.toBeNull();
+    expect(watchlistEditor?.querySelector('p')?.textContent?.trim()).toBe('Watchlist');
     expect(watchlistEditor?.className).toContain('min-h-full');
     const watchlistActions = watchlistEditor?.querySelector('form')?.lastElementChild;
     expect(watchlistActions?.className).toContain('grid-cols-2');
@@ -281,13 +282,18 @@ describe('App', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(rendered.querySelector('dialog[open] [aria-labelledby="watchlist-edit-heading"]')).not.toBeNull();
+    const watchlistEdit = rendered.querySelector<HTMLElement>('dialog[open] [aria-labelledby="watchlist-edit-heading"]');
+    expect(watchlistEdit).not.toBeNull();
+    expect(watchlistEdit?.querySelector('p')?.textContent?.trim()).toBe('Watchlist');
     const notes = rendered.querySelector<HTMLTextAreaElement>('textarea[name="editWatchlistNotes"]');
     expect(app.editingWatchlistNotes).toBe('Recommended by Alex');
     expect(notes?.value).toBe('Recommended by Alex');
     expect(rendered.textContent).toContain('19/500');
     const editPriorityButtons = rendered.querySelector<HTMLFormElement>('form:has(textarea[name="editWatchlistNotes"])')
       ?.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Priority"] button');
+    expect(editPriorityButtons?.[1].getAttribute('aria-pressed')).toBe('true');
+    expect(editPriorityButtons?.[1].className).toContain('bg-indigo-100');
+    expect(editPriorityButtons?.[1].className).not.toContain('bg-stone-50');
     editPriorityButtons?.[0].click();
     fixture.detectChanges();
     expect(editPriorityButtons?.[0].getAttribute('aria-pressed')).toBe('true');
@@ -312,7 +318,34 @@ describe('App', () => {
     fixture.detectChanges();
 
     const rendered = fixture.nativeElement as HTMLElement;
-    rendered.querySelector<HTMLButtonElement>('button[aria-label="Remove There Will Be Blood from watchlist"]')?.click();
+    const editButton = rendered.querySelector<HTMLButtonElement>('button[aria-label="Edit There Will Be Blood"]');
+    const itemActions = editButton?.parentElement;
+    const actionButtons = itemActions?.querySelectorAll<HTMLButtonElement>('button');
+    expect(actionButtons?.[0].textContent).toContain('I’ve seen it');
+    expect(actionButtons?.[1]).toBe(editButton);
+    expect(editButton?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+
+    editButton?.click();
+    fixture.detectChanges();
+    const editSection = rendered.querySelector<HTMLElement>('[aria-labelledby="watchlist-edit-heading"]');
+    const editRemoveButton = editSection?.querySelector<HTMLButtonElement>('button[aria-label="Remove There Will Be Blood from watchlist"]');
+    expect(editRemoveButton?.parentElement?.className).toContain('lg:order-1');
+    editRemoveButton?.click();
+    fixture.detectChanges();
+
+    const modalConfirmation = rendered.querySelector<HTMLElement>('[aria-labelledby="watchlist-delete-heading-7"]');
+    expect(modalConfirmation?.closest('dialog')?.open).toBe(true);
+    expect(api.deleteWatchlistItem).not.toHaveBeenCalled();
+    modalConfirmation?.querySelector<HTMLButtonElement>('button[type="button"]')?.click();
+    fixture.detectChanges();
+
+    expect(rendered.querySelector('button[aria-label="Remove There Will Be Blood from watchlist"]')).toBeNull();
+    expect(rendered.querySelector('button[aria-label="Edit There Will Be Blood"]')).not.toBeNull();
+
+    editButton?.click();
+    fixture.detectChanges();
+    const reopenedEdit = rendered.querySelector<HTMLElement>('[aria-labelledby="watchlist-edit-heading"]');
+    reopenedEdit?.querySelector<HTMLButtonElement>('button[aria-label="Remove There Will Be Blood from watchlist"]')?.click();
     fixture.detectChanges();
 
     const confirmation = rendered.querySelector<HTMLElement>('[aria-labelledby="watchlist-delete-heading-7"]');
@@ -321,14 +354,9 @@ describe('App', () => {
     expect(confirmation?.closest('li')).toBeNull();
     expect(api.deleteWatchlistItem).not.toHaveBeenCalled();
 
-    confirmation?.querySelector<HTMLButtonElement>('button[type="button"]')?.click();
+    confirmation?.querySelectorAll<HTMLButtonElement>('button')[1].click();
+    await fixture.whenStable();
     fixture.detectChanges();
-    expect(rendered.querySelector('[aria-labelledby="watchlist-delete-heading-7"]')).toBeNull();
-    expect(rendered.querySelector('button[aria-label="Remove There Will Be Blood from watchlist"]')).not.toBeNull();
-    expect(api.deleteWatchlistItem).not.toHaveBeenCalled();
-
-    app.requestRemoveWatchlistItem(app.watchlist()[0]);
-    await app.confirmRemoveWatchlistItem(app.watchlist()[0]);
     expect(api.deleteWatchlistItem).toHaveBeenCalledWith(7);
     expect(app.watchlist()).toHaveLength(0);
   });
@@ -357,6 +385,7 @@ describe('App', () => {
     fixture.detectChanges();
 
     const editor = rendered.querySelector<HTMLElement>('[aria-labelledby="editor-heading"]');
+    expect(editor?.parentElement?.querySelector('p')?.textContent?.trim()).toBe('Collection');
     const ratingButtons = editor?.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Rating"] button');
     expect(editor?.querySelector('form')?.className).toContain('grid-cols-1');
     expect(editor?.querySelector('form')?.className).not.toContain('grid-cols-[minmax(0,1fr)_5rem]');
