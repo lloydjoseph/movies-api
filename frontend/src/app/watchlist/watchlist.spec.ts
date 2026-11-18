@@ -48,7 +48,7 @@ describe('WatchlistComponent', () => {
     const seen = vi.fn();
     fixture.componentInstance.markSeen.subscribe(seen);
     Array.from(rendered.querySelectorAll<HTMLButtonElement>('button'))
-      .find(button => button.textContent?.includes('I’ve seen it'))
+      .find(button => button.textContent?.includes('Add to collection'))
       ?.click();
     expect(seen).toHaveBeenCalledWith(initialItem);
   });

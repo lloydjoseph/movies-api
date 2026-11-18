@@ -239,7 +239,7 @@ describe('App', () => {
 
     expect(fixture.nativeElement.textContent).toContain('There Will Be Blood');
     Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('app-watchlist button'))
-      .find(button => button.textContent?.includes('I’ve seen it'))
+      .find(button => button.textContent?.includes('Add to collection'))
       ?.click();
     fixture.detectChanges();
 
@@ -247,6 +247,7 @@ describe('App', () => {
     expect(app.editorOpen()).toBe(true);
     expect(app.title).toBe('There Will Be Blood');
     expect(app.releaseYear).toBe(2007);
+    expect(fixture.nativeElement.querySelector('app-movie-lookup')).toBeNull();
 
     app.releaseYear = 2025;
     await app.saveMovie();
@@ -325,7 +326,8 @@ describe('App', () => {
     expect(confirmation?.textContent).toContain('Add');
     expect(confirmation?.classList.contains('bg-stone-100')).toBe(true);
     expect(confirmation?.classList.contains('fixed')).toBe(false);
-    expect(rendered.querySelector('app-collection')?.previousElementSibling).toBe(confirmation);
+    expect(confirmation?.closest('app-collection')).not.toBeNull();
+    expect(confirmation?.nextElementSibling?.getAttribute('aria-label')).toBe('Movie collection');
 
     app.closeSaveConfirmation();
     app.openEditForm({ id: 1, name: 'Arrival', releaseYear: 2016, rating: 9 });

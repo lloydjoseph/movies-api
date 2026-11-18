@@ -10,7 +10,7 @@ import {
 import { MovieApiService } from './movie-api.service';
 import type { Movie, MovieInput, MovieLookupResult, SignedInUser, WatchlistItem } from './movie-api.service';
 import { CollectionComponent } from './collection/collection';
-import type { CollectionView, MovieDeletionRequest } from './collection/collection.models';
+import type { CollectionView, MovieDeletionRequest, SaveConfirmation } from './collection/collection.models';
 import { MovieLookupComponent } from './movie-lookup/movie-lookup';
 import { ratingColor, ratingTextColor } from './movie-presentation';
 import { WatchlistComponent } from './watchlist/watchlist';
@@ -19,13 +19,6 @@ type Theme = 'light' | 'dark';
 type CollectionViewState = CollectionView & {
   activeTab: 'movies' | 'watchlist';
 };
-type SaveConfirmation = {
-  action: 'created' | 'updated';
-  name: string;
-  releaseYear: number;
-  rating: number | null;
-};
-
 function isMovieSort(value: unknown): value is CollectionView['sortBy'] {
   return value === 'rating_desc' || value === 'rating_asc'
     || value === 'year_desc' || value === 'year_asc'

@@ -11,3 +11,10 @@ export interface MovieDeletionRequest {
   movie: Movie;
   sequence: number;
 }
+
+export interface SaveConfirmation {
+  action: 'created' | 'updated';
+  name: string;
+  releaseYear: number;
+  rating: number | null;
+}

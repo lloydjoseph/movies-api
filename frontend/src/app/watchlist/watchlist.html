@@ -2,10 +2,53 @@
   <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <h1 class="text-4xl font-semibold tracking-tight sm:text-5xl">Watchlist</h1>
-      <p class="mt-2 text-base text-stone-600 dark:text-neutral-300">{{ items().length }} {{ items().length === 1 ? 'title' : 'titles' }}</p>
+      <p class="mt-2 text-base text-stone-600 dark:text-neutral-300">
+        @if (selectedPriorities().length || query().trim().length >= 3) {
+          {{ filteredItems().length }} of {{ items().length }} {{ items().length === 1 ? 'title' : 'titles' }}
+        } @else {
+          {{ items().length }} {{ items().length === 1 ? 'title' : 'titles' }}
+        }
+      </p>
     </div>
     <button class="inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 self-start rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 sm:self-auto" type="button" (click)="openAddForm()"><svg lucidePlus class="size-5" aria-hidden="true"></svg> Add to watchlist</button>
   </div>
+
+  @if (items().length) {
+    <div class="mt-6">
+      <label class="flex min-h-12 w-full items-center gap-3 rounded-md border border-stone-300 bg-white px-3 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-900">
+        <svg lucideSearch class="size-5 shrink-0 text-stone-500" aria-hidden="true"></svg><span class="sr-only">Search watchlist titles</span>
+        <input class="search-input min-w-0 flex-1 bg-transparent text-base placeholder:text-stone-500 dark:placeholder:text-neutral-400" type="search" maxlength="100" placeholder="Search titles (3+ characters)" [ngModel]="query()" (ngModelChange)="query.set($event)">
+      </label>
+      @if (query().trim().length > 0 && query().trim().length < 3) {
+        <p class="pt-2 text-sm text-stone-600 dark:text-neutral-300">Enter at least 3 characters to filter by title.</p>
+      }
+    </div>
+    <div class="mt-6 flex flex-wrap items-center gap-2" role="group" aria-label="Filter watchlist by priority">
+      <span class="mr-1 text-sm font-medium text-stone-600 dark:text-neutral-300">Priority:</span>
+      <button class="min-h-10 cursor-pointer rounded-md border border-stone-300 px-3.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-orange-600"
+        type="button" (click)="clearPriorityFilters()" [attr.aria-pressed]="selectedPriorities().length === 0"
+        [class]="selectedPriorities().length === 0
+          ? 'min-h-10 cursor-pointer rounded-md border border-stone-900 bg-stone-900 px-3.5 text-sm font-semibold text-white transition-colors focus-visible:outline-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:bg-white dark:text-stone-900'
+          : 'min-h-10 cursor-pointer rounded-md border border-stone-300 bg-stone-100 px-3.5 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-200 focus-visible:outline-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800'">All</button>
+      @for (priority of priorityOptions; track priority) {
+        <button class="min-h-10 cursor-pointer rounded-md border px-3.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-orange-600"
+          type="button" (click)="togglePriority(priority)" [attr.aria-pressed]="selectedPriorities().includes(priority)"
+          [class.border-stone-300]="!selectedPriorities().includes(priority)" [class.bg-white]="!selectedPriorities().includes(priority)"
+          [class.text-stone-700]="!selectedPriorities().includes(priority)" [class.hover:bg-stone-100]="!selectedPriorities().includes(priority)"
+          [class.dark:border-neutral-700]="!selectedPriorities().includes(priority)" [class.dark:bg-neutral-900]="!selectedPriorities().includes(priority)"
+          [class.dark:text-neutral-300]="!selectedPriorities().includes(priority)" [class.dark:hover:bg-neutral-800]="!selectedPriorities().includes(priority)"
+          [class.border-sky-300]="selectedPriorities().includes(priority) && priority === 'HIGH'" [class.bg-sky-100]="selectedPriorities().includes(priority) && priority === 'HIGH'"
+          [class.text-sky-900]="selectedPriorities().includes(priority) && priority === 'HIGH'" [class.dark:border-sky-800]="selectedPriorities().includes(priority) && priority === 'HIGH'"
+          [class.dark:bg-sky-950]="selectedPriorities().includes(priority) && priority === 'HIGH'" [class.dark:text-sky-100]="selectedPriorities().includes(priority) && priority === 'HIGH'"
+          [class.border-indigo-300]="selectedPriorities().includes(priority) && priority === 'MEDIUM'" [class.bg-indigo-100]="selectedPriorities().includes(priority) && priority === 'MEDIUM'"
+          [class.text-indigo-900]="selectedPriorities().includes(priority) && priority === 'MEDIUM'" [class.dark:border-indigo-800]="selectedPriorities().includes(priority) && priority === 'MEDIUM'"
+          [class.dark:bg-indigo-950]="selectedPriorities().includes(priority) && priority === 'MEDIUM'" [class.dark:text-indigo-100]="selectedPriorities().includes(priority) && priority === 'MEDIUM'"
+          [class.border-purple-300]="selectedPriorities().includes(priority) && priority === 'LOW'" [class.bg-purple-100]="selectedPriorities().includes(priority) && priority === 'LOW'"
+          [class.text-purple-900]="selectedPriorities().includes(priority) && priority === 'LOW'" [class.dark:border-purple-800]="selectedPriorities().includes(priority) && priority === 'LOW'"
+          [class.dark:bg-purple-950]="selectedPriorities().includes(priority) && priority === 'LOW'" [class.dark:text-purple-100]="selectedPriorities().includes(priority) && priority === 'LOW'">{{ priorityLabel(priority) }}</button>
+      }
+    </div>
+  }
 
   @if (error()) {
     <div class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-300 bg-red-50 p-4 text-base text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">
@@ -16,9 +59,9 @@
   <section class="mt-9" aria-label="Watchlist">
     @if (loading() && !items().length) {
       <p class="py-10 text-center text-base text-stone-600 dark:text-neutral-300" role="status">Loading watchlist…</p>
-    } @else if (items().length) {
+    } @else if (filteredItems().length) {
       <ul class="divide-y divide-stone-200 border-t border-stone-200 dark:divide-neutral-800 dark:border-neutral-800">
-        @for (item of items(); track item.id) {
+        @for (item of filteredItems(); track item.id) {
           <li class="py-4 sm:py-5">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div class="min-w-0">
@@ -48,13 +91,18 @@
                 @if (item.notes) { <p class="mt-1 whitespace-pre-wrap break-words text-sm text-stone-600 dark:text-neutral-300">{{ item.notes }}</p> }
               </div>
               <div class="flex shrink-0 gap-2">
-                <button class="min-h-11 cursor-pointer rounded-md bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700" type="button" (click)="markItemSeen(item)">I’ve seen it</button>
+                <button class="min-h-11 cursor-pointer rounded-md bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700" type="button" (click)="markItemSeen(item)">Add to collection</button>
                 <button class="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-md border border-stone-300 bg-white hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800" type="button" (click)="openEdit(item)" [attr.aria-label]="'Edit ' + item.name"><svg lucidePencil class="size-4" aria-hidden="true"></svg></button>
               </div>
             </div>
           </li>
         }
       </ul>
+    } @else if (items().length) {
+      <div class="py-16 text-center">
+        <h2 class="text-xl font-semibold">No titles match your search and priority filters</h2>
+        <button class="mt-4 min-h-11 cursor-pointer rounded-md border border-stone-300 px-4 text-sm font-medium hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="query.set(''); clearPriorityFilters()">Clear search and filters</button>
+      </div>
     } @else {
       <div class="py-16 text-center">
         <h2 class="text-xl font-semibold">{{ loading() ? 'Loading watchlist…' : 'Your watchlist is empty' }}</h2>

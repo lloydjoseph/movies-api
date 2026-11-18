@@ -47,13 +47,15 @@
             <div class="flex min-w-0 flex-col gap-2 text-base font-medium">
               <div class="flex items-center justify-between gap-2">
                 <label for="movie-title">Title</label>
-                <span class="text-xs font-normal text-stone-500 dark:text-neutral-400">TMDb suggestions appear as you type</span>
+                @if (pendingWatchlistItemId() === null) {
+                  <span class="text-xs font-normal text-stone-500 dark:text-neutral-400">TMDb suggestions appear as you type</span>
+                }
               </div>
               <div class="overflow-hidden rounded-md border border-stone-300 bg-white focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950">
                 <div class="flex min-h-12 w-full items-center gap-3 border-stone-300 px-3 dark:border-neutral-700" [class.border-b]="lookupResultsVisible">
                   <input id="movie-title" class="search-input min-w-0 flex-1 bg-transparent text-base text-stone-900 placeholder:text-stone-400 dark:text-white dark:placeholder:text-neutral-500" name="title" required maxlength="255" [(ngModel)]="title" placeholder="Movie title" autofocus>
                 </div>
-                @if (!editingMovie()) {
+                @if (!editingMovie() && pendingWatchlistItemId() === null) {
                   <app-movie-lookup class="contents" [searchTerm]="title" (resultsVisible)="lookupResultsVisible = $event" (movieSelected)="onMovieLookupSelected($event)" (sessionExpired)="onSessionExpired()" />
                 }
               </div>
@@ -113,39 +115,14 @@
       </section>
     } @else {
       <section class="mx-auto max-w-5xl px-5 pt-10 pb-28 sm:px-8 sm:py-14">
-        @if (activeTab() === 'movies') {
-          @if (saveConfirmation(); as confirmation) {
-            <section class="movie-panel-enter mt-6 flex min-w-0 flex-col items-start gap-3 rounded-lg border border-stone-200 bg-stone-100 p-4 transition-opacity duration-300 dark:border-neutral-800 dark:bg-neutral-900 sm:p-5 motion-reduce:transition-none"
-              [class.opacity-0]="saveConfirmationFading()"
-              aria-live="polite">
-              <span class="rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide"
-                [class.bg-green-200]="confirmation.action === 'created'"
-                [class.text-green-900]="confirmation.action === 'created'"
-                [class.dark:bg-green-900]="confirmation.action === 'created'"
-                [class.dark:text-green-100]="confirmation.action === 'created'"
-                [class.bg-blue-200]="confirmation.action === 'updated'"
-                [class.text-blue-900]="confirmation.action === 'updated'"
-                [class.dark:bg-blue-900]="confirmation.action === 'updated'"
-                [class.dark:text-blue-100]="confirmation.action === 'updated'">
-                {{ confirmation.action === 'created' ? 'Add' : 'Edit' }}
-              </span>
-              <div class="flex w-full min-w-0 items-center gap-3 sm:gap-5">
-                <p class="min-w-0 flex-1 break-words text-base font-semibold sm:text-lg">{{ confirmation.name }}</p>
-                <span class="text-sm text-stone-600 dark:text-neutral-300 sm:text-base">{{ confirmation.releaseYear }}</span>
-                <span class="inline-flex min-w-20 items-center justify-center rounded-md px-3 py-2 text-sm font-semibold sm:text-base"
-                  [style.background-color]="ratingColor(confirmation.rating)" [style.color]="ratingTextColor(confirmation.rating)">
-                  {{ confirmation.rating === null ? 'Unrated' : confirmation.rating + ' / 10' }}
-                </span>
-              </div>
-            </section>
-          }
-        }
         <app-collection
           class="block"
           [active]="activeTab() === 'movies'"
           [reloadRequest]="collectionReloadRequest()"
           [view]="collectionView()"
           [deleteRequest]="movieDeletionRequest()"
+          [saveConfirmation]="saveConfirmation()"
+          [saveConfirmationFading]="saveConfirmationFading()"
           (viewChange)="onCollectionViewChange($event)"
           (createMovie)="openCreateForm()"
           (editMovie)="openEditForm($event)"

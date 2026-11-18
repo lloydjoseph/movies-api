@@ -13,7 +13,7 @@ import {
 import { MovieApiService } from '../movie-api.service';
 import type { CatalogQuery, Movie, MovieSort } from '../movie-api.service';
 import { ratingColor, ratingTextColor } from '../movie-presentation';
-import type { CollectionView, MovieDeletionRequest } from './collection.models';
+import type { CollectionView, MovieDeletionRequest, SaveConfirmation } from './collection.models';
 
 type SortDirection = 'ascending' | 'descending' | 'unsorted';
 type PendingMovieDeletion = {
@@ -47,6 +47,8 @@ export class CollectionComponent implements OnChanges, OnDestroy {
     includeUnrated: false,
   };
   @Input() deleteRequest: MovieDeletionRequest | null = null;
+  @Input() saveConfirmation: SaveConfirmation | null = null;
+  @Input() saveConfirmationFading = false;
   @Output() readonly viewChange = new EventEmitter<CollectionView>();
   @Output() readonly createMovie = new EventEmitter<void>();
   @Output() readonly editMovie = new EventEmitter<Movie>();

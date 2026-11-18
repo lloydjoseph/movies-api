@@ -1,14 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleChanges, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { LucideArrowDown, LucideArrowUp, LucideMinus, LucidePencil, LucidePlus } from '@lucide/angular';
+import { LucideArrowDown, LucideArrowUp, LucideMinus, LucidePencil, LucidePlus, LucideSearch } from '@lucide/angular';
 import { MovieApiService, WatchlistItem, WatchlistPriority } from '../movie-api.service';
 import { MovieLookupComponent } from '../movie-lookup/movie-lookup';
 import type { MovieLookupResult } from '../movie-api.service';
 
 @Component({
   selector: 'app-watchlist',
-  imports: [FormsModule, LucideArrowDown, LucideArrowUp, LucideMinus, LucidePencil, LucidePlus, MovieLookupComponent],
+  imports: [FormsModule, LucideArrowDown, LucideArrowUp, LucideMinus, LucidePencil, LucidePlus, LucideSearch, MovieLookupComponent],
   templateUrl: './watchlist.html',
 })
 export class WatchlistComponent implements OnChanges {
@@ -25,9 +25,19 @@ export class WatchlistComponent implements OnChanges {
   readonly saving = signal(false);
   readonly removingItemId = signal<number | null>(null);
   readonly error = signal('');
+  readonly query = signal('');
   readonly addEditorOpen = signal(false);
   readonly editingItemId = signal<number | null>(null);
   readonly deletingItemId = signal<number | null>(null);
+  readonly selectedPriorities = signal<WatchlistPriority[]>([]);
+  readonly priorityOptions: WatchlistPriority[] = ['HIGH', 'MEDIUM', 'LOW'];
+  readonly filteredItems = computed(() => {
+    const selected = this.selectedPriorities();
+    const query = this.query().trim().toLocaleLowerCase();
+    return this.items().filter(item =>
+      (selected.length === 0 || selected.includes(item.priority))
+      && (query.length < 3 || item.name.toLocaleLowerCase().includes(query)));
+  });
   readonly editingItem = computed(() =>
     this.items().find(item => item.id === this.editingItemId()) ?? null);
   readonly deletingItem = computed(() =>
@@ -184,6 +194,16 @@ export class WatchlistComponent implements OnChanges {
 
   priorityLabel(priority: WatchlistPriority): string {
     return priority.charAt(0) + priority.slice(1).toLowerCase();
+  }
+
+  togglePriority(priority: WatchlistPriority): void {
+    this.selectedPriorities.update(selected => selected.includes(priority)
+      ? selected.filter(value => value !== priority)
+      : [...selected, priority]);
+  }
+
+  clearPriorityFilters(): void {
+    this.selectedPriorities.set([]);
   }
 
   isValidReleaseYear(year: number | null): boolean {
