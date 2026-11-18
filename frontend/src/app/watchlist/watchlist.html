@@ -1,0 +1,165 @@
+<div [hidden]="!active">
+  <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <h1 class="text-4xl font-semibold tracking-tight sm:text-5xl">Watchlist</h1>
+      <p class="mt-2 text-base text-stone-600 dark:text-neutral-300">{{ items().length }} {{ items().length === 1 ? 'title' : 'titles' }}</p>
+    </div>
+    <button class="inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 self-start rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 sm:self-auto" type="button" (click)="openAddForm()"><svg lucidePlus class="size-5" aria-hidden="true"></svg> Add to watchlist</button>
+  </div>
+
+  @if (error()) {
+    <div class="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-300 bg-red-50 p-4 text-base text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">
+      <span>{{ error() }}</span><button class="cursor-pointer font-semibold underline" type="button" (click)="load()">Retry</button>
+    </div>
+  }
+
+  <section class="mt-9" aria-label="Watchlist">
+    @if (loading() && !items().length) {
+      <p class="py-10 text-center text-base text-stone-600 dark:text-neutral-300" role="status">Loading watchlist…</p>
+    } @else if (items().length) {
+      <ul class="divide-y divide-stone-200 border-t border-stone-200 dark:divide-neutral-800 dark:border-neutral-800">
+        @for (item of items(); track item.id) {
+          <li class="py-4 sm:py-5">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="break-words text-lg font-semibold leading-snug sm:text-xl">{{ item.name }}</span>
+                  <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold"
+                    [class.bg-purple-100]="item.priority === 'LOW'"
+                    [class.text-purple-900]="item.priority === 'LOW'"
+                    [class.dark:bg-purple-900]="item.priority === 'LOW'"
+                    [class.dark:text-purple-100]="item.priority === 'LOW'"
+                    [class.bg-indigo-100]="item.priority === 'MEDIUM'"
+                    [class.text-indigo-900]="item.priority === 'MEDIUM'"
+                    [class.dark:bg-indigo-900]="item.priority === 'MEDIUM'"
+                    [class.dark:text-indigo-100]="item.priority === 'MEDIUM'"
+                    [class.bg-sky-100]="item.priority === 'HIGH'"
+                    [class.text-sky-900]="item.priority === 'HIGH'"
+                    [class.dark:bg-sky-900]="item.priority === 'HIGH'"
+                    [class.dark:text-sky-100]="item.priority === 'HIGH'"
+                    [attr.aria-label]="'Priority: ' + priorityLabel(item.priority)">
+                    @if (item.priority === 'HIGH') { <svg lucideArrowUp class="size-3" aria-hidden="true"></svg> }
+                    @else if (item.priority === 'LOW') { <svg lucideArrowDown class="size-3" aria-hidden="true"></svg> }
+                    @else { <svg lucideMinus class="size-3" aria-hidden="true"></svg> }
+                    {{ priorityLabel(item.priority) }}
+                  </span>
+                </div>
+                @if (item.notes) { <p class="mt-1 whitespace-pre-wrap break-words text-sm text-stone-600 dark:text-neutral-300">{{ item.notes }}</p> }
+              </div>
+              <div class="flex shrink-0 gap-2">
+                <button class="min-h-11 cursor-pointer rounded-md bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700" type="button" (click)="markItemSeen(item)">I’ve seen it</button>
+                <button class="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-md border border-stone-300 bg-white hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800" type="button" (click)="openEdit(item)" [attr.aria-label]="'Edit ' + item.name"><svg lucidePencil class="size-4" aria-hidden="true"></svg></button>
+              </div>
+            </div>
+          </li>
+        }
+      </ul>
+    } @else {
+      <div class="py-16 text-center">
+        <h2 class="text-xl font-semibold">{{ loading() ? 'Loading watchlist…' : 'Your watchlist is empty' }}</h2>
+        @if (!loading()) { <p class="mt-2 text-base text-stone-600 dark:text-neutral-300">Add titles you’d like to watch later.</p> }
+      </div>
+    }
+  </section>
+
+  <dialog #editorDialog class="m-0 h-dvh max-h-none w-full max-w-none overflow-y-auto border-0 bg-white p-0 text-stone-900 backdrop:bg-black/50 dark:bg-neutral-900 dark:text-stone-100 lg:m-auto lg:h-fit lg:max-h-[90dvh] lg:max-w-2xl lg:rounded-xl lg:border lg:border-stone-200 dark:lg:border-neutral-800" (cancel)="onEditorDialogCancel($event)" (click)="onEditorDialogClick($event)">
+    @if (addEditorOpen()) {
+      <section class="min-h-full p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] lg:p-7" aria-labelledby="watchlist-editor-heading">
+        <p class="mb-1 text-sm font-medium text-stone-500 dark:text-neutral-400">Watchlist</p>
+        <h2 id="watchlist-editor-heading" class="text-2xl font-semibold">Add to your watchlist</h2>
+        @if (error()) { <p class="mt-5 rounded-md border border-red-300 bg-red-50 p-4 text-base text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">{{ error() }}</p> }
+        <form class="mt-6 flex flex-col gap-4" #watchlistForm="ngForm" (ngSubmit)="saveNewItem()">
+          <label class="flex min-w-0 flex-col gap-2 text-base font-medium"><span>Title</span>
+            <input class="min-h-12 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="watchlistTitle" required maxlength="255" [(ngModel)]="title" placeholder="Movie title" autofocus>
+          </label>
+          <fieldset class="flex flex-col gap-3">
+            <legend class="mb-2 block text-sm font-medium">Priority</legend>
+            <div class="inline-flex min-h-12 w-full gap-2" role="group" aria-label="Priority">
+              <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600 hover:bg-sky-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-sky-900"
+                type="button" (click)="priority = 'HIGH'" [attr.aria-pressed]="priority === 'HIGH'"
+                [class.bg-sky-100]="priority === 'HIGH'" [class.text-sky-900]="priority === 'HIGH'"
+                [class.dark:bg-sky-950]="priority === 'HIGH'" [class.dark:text-sky-100]="priority === 'HIGH'"><svg lucideArrowUp class="size-4" aria-hidden="true"></svg>High</button>
+              <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 px-3 text-sm font-medium hover:bg-indigo-200 dark:border-neutral-700 dark:hover:bg-indigo-900"
+                type="button" (click)="priority = 'MEDIUM'" [attr.aria-pressed]="priority === 'MEDIUM'"
+                [class.bg-stone-50]="priority !== 'MEDIUM'" [class.text-stone-600]="priority !== 'MEDIUM'"
+                [class.dark:bg-neutral-950]="priority !== 'MEDIUM'" [class.dark:text-neutral-300]="priority !== 'MEDIUM'"
+                [class.bg-indigo-100]="priority === 'MEDIUM'" [class.text-indigo-900]="priority === 'MEDIUM'"
+                [class.dark:bg-indigo-950]="priority === 'MEDIUM'" [class.dark:text-indigo-100]="priority === 'MEDIUM'"><svg lucideMinus class="size-4" aria-hidden="true"></svg>Medium</button>
+              <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600 hover:bg-purple-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-purple-900"
+                type="button" (click)="priority = 'LOW'" [attr.aria-pressed]="priority === 'LOW'"
+                [class.bg-purple-100]="priority === 'LOW'" [class.text-purple-900]="priority === 'LOW'"
+                [class.dark:bg-purple-950]="priority === 'LOW'" [class.dark:text-purple-100]="priority === 'LOW'"><svg lucideArrowDown class="size-4" aria-hidden="true"></svg>Low</button>
+            </div>
+          </fieldset>
+          <label class="flex min-w-0 flex-1 flex-col gap-2 text-base font-medium">Notes
+            <textarea class="min-h-12 resize-y rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-normal text-stone-900 placeholder:text-stone-400 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="watchlistNotes" maxlength="500" rows="2" [(ngModel)]="notes" placeholder="Why you want to watch it"></textarea>
+            <div class="flex items-center justify-between text-xs font-normal text-stone-500 dark:text-neutral-400"><span class="text-sm">Optional</span><span>{{ notes.length }}/500</span></div>
+          </label>
+          <div class="grid grid-cols-2 gap-3 border-t border-stone-200 pt-4 dark:border-neutral-800 lg:flex lg:justify-end">
+            <button class="min-h-12 w-full cursor-pointer rounded-md border border-stone-300 px-5 text-base font-medium hover:bg-stone-100 dark:border-neutral-700 dark:hover:bg-neutral-800 lg:w-auto" type="button" (click)="closeAddForm()">Cancel</button>
+            <button class="min-h-12 w-full cursor-pointer rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto" type="submit" [disabled]="watchlistForm.invalid || saving()">{{ saving() ? 'Saving…' : 'Add title' }}</button>
+          </div>
+        </form>
+      </section>
+    } @else if (editingItem(); as item) {
+      <section class="p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] lg:p-7" aria-labelledby="watchlist-edit-heading">
+        <p class="mb-1 text-sm font-medium text-stone-500 dark:text-neutral-400">Watchlist</p>
+        <h2 id="watchlist-edit-heading" class="text-2xl font-semibold">Edit “{{ item.name }}”</h2>
+        @if (error()) { <p class="mt-5 rounded-md border border-red-300 bg-red-50 p-4 text-base text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">{{ error() }}</p> }
+        <form class="mt-6 flex flex-col gap-4" (ngSubmit)="saveEdit(item)">
+          <label class="flex min-w-0 flex-col gap-2 text-base font-medium"><span>Title</span>
+            <input class="min-h-12 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="editWatchlistTitle" required maxlength="255" [(ngModel)]="editingTitle" autofocus>
+          </label>
+          <fieldset class="flex flex-col gap-3">
+            <legend class="mb-2 block text-sm font-medium">Priority</legend>
+            <div class="inline-flex min-h-12 w-full gap-2 sm:w-72" role="group" aria-label="Priority">
+              <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 px-3 text-sm font-medium hover:bg-sky-200 dark:border-neutral-700 dark:hover:bg-sky-900"
+                type="button" (click)="editingPriority = 'HIGH'" [attr.aria-pressed]="editingPriority === 'HIGH'"
+                [class.bg-stone-50]="editingPriority !== 'HIGH'" [class.text-stone-600]="editingPriority !== 'HIGH'"
+                [class.dark:bg-neutral-950]="editingPriority !== 'HIGH'" [class.dark:text-neutral-300]="editingPriority !== 'HIGH'"
+                [class.bg-sky-100]="editingPriority === 'HIGH'" [class.text-sky-900]="editingPriority === 'HIGH'"
+                [class.dark:bg-sky-950]="editingPriority === 'HIGH'" [class.dark:text-sky-100]="editingPriority === 'HIGH'"><svg lucideArrowUp class="size-4" aria-hidden="true"></svg>High</button>
+              <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 px-3 text-sm font-medium hover:bg-indigo-200 dark:border-neutral-700 dark:hover:bg-indigo-900"
+                type="button" (click)="editingPriority = 'MEDIUM'" [attr.aria-pressed]="editingPriority === 'MEDIUM'"
+                [class.bg-stone-50]="editingPriority !== 'MEDIUM'" [class.text-stone-600]="editingPriority !== 'MEDIUM'"
+                [class.dark:bg-neutral-950]="editingPriority !== 'MEDIUM'" [class.dark:text-neutral-300]="editingPriority !== 'MEDIUM'"
+                [class.bg-indigo-100]="editingPriority === 'MEDIUM'" [class.text-indigo-900]="editingPriority === 'MEDIUM'"
+                [class.dark:bg-indigo-950]="editingPriority === 'MEDIUM'" [class.dark:text-indigo-100]="editingPriority === 'MEDIUM'"><svg lucideMinus class="size-4" aria-hidden="true"></svg>Medium</button>
+              <button class="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md border border-stone-300 px-3 text-sm font-medium hover:bg-purple-200 dark:border-neutral-700 dark:hover:bg-purple-900"
+                type="button" (click)="editingPriority = 'LOW'" [attr.aria-pressed]="editingPriority === 'LOW'"
+                [class.bg-stone-50]="editingPriority !== 'LOW'" [class.text-stone-600]="editingPriority !== 'LOW'"
+                [class.dark:bg-neutral-950]="editingPriority !== 'LOW'" [class.dark:text-neutral-300]="editingPriority !== 'LOW'"
+                [class.bg-purple-100]="editingPriority === 'LOW'" [class.text-purple-900]="editingPriority === 'LOW'"
+                [class.dark:bg-purple-950]="editingPriority === 'LOW'" [class.dark:text-purple-100]="editingPriority === 'LOW'"><svg lucideArrowDown class="size-4" aria-hidden="true"></svg>Low</button>
+            </div>
+          </fieldset>
+          <label class="flex flex-col gap-2 text-base font-medium">Notes
+            <textarea class="min-h-20 resize-y rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-normal dark:border-neutral-700 dark:bg-neutral-950" name="editWatchlistNotes" maxlength="500" rows="3" [(ngModel)]="editingNotes"></textarea>
+            <div class="flex items-center justify-between text-xs font-normal text-stone-500 dark:text-neutral-400"><span class="text-sm">Optional</span><span>{{ editingNotes.length }}/500</span></div>
+          </label>
+          <div class="grid grid-cols-2 gap-3 border-t border-stone-200 pt-4 dark:border-neutral-800 lg:flex lg:items-center lg:justify-end">
+            <button class="min-h-12 w-full cursor-pointer rounded-md border border-stone-300 px-5 text-base font-medium hover:bg-stone-100 dark:border-neutral-700 dark:hover:bg-neutral-800 lg:order-2 lg:w-auto" type="button" (click)="cancelEdit()">Cancel</button>
+            <button class="min-h-12 w-full cursor-pointer rounded-md bg-orange-600 px-5 text-base font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50 lg:order-3 lg:w-auto" type="submit" [disabled]="!editingTitle.trim() || saving()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
+            <div class="col-span-2 row-start-2 border-t border-stone-200 pt-3 dark:border-neutral-800 lg:order-1 lg:mr-auto lg:border-0 lg:pt-0">
+              <button class="min-h-12 w-full cursor-pointer rounded-md border border-red-300 bg-white px-5 text-base font-medium text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900 dark:bg-neutral-900 dark:text-red-300 dark:hover:bg-red-950 lg:w-auto" type="button" (click)="requestRemove(item)" [disabled]="saving()" [attr.aria-label]="'Remove ' + item.name + ' from watchlist'">Remove</button>
+            </div>
+          </div>
+        </form>
+      </section>
+    }
+  </dialog>
+
+  <dialog #confirmationDialog class="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-lg border border-stone-200 bg-white p-0 text-stone-900 shadow-xl backdrop:bg-black/50 dark:border-neutral-800 dark:bg-neutral-900 dark:text-stone-100" (cancel)="onConfirmationDialogCancel($event)" (click)="onConfirmationDialogClick($event)">
+    @if (deletingItem(); as item) {
+      <section class="p-5 sm:p-6" [attr.aria-labelledby]="'watchlist-delete-heading-' + item.id">
+        <h2 [id]="'watchlist-delete-heading-' + item.id" class="text-xl font-semibold">Remove “{{ item.name }}” from your watchlist?</h2>
+        <p class="mt-2 text-base text-stone-600 dark:text-neutral-300">This cannot be undone.</p>
+        @if (error()) { <p class="mt-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">{{ error() }}</p> }
+        <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button class="min-h-11 cursor-pointer rounded-md border border-stone-300 px-4 text-base font-medium hover:bg-stone-100 dark:border-neutral-700 dark:hover:bg-neutral-800" type="button" (click)="cancelRemove()">Cancel</button>
+          <button class="min-h-11 cursor-pointer rounded-md bg-red-700 px-4 text-base font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50" type="button" (click)="confirmRemove(item)" [disabled]="removingItemId() !== null">{{ removingItemId() === item.id ? 'Removing…' : 'Remove title' }}</button>
+        </div>
+      </section>
+    }
+  </dialog>
+</div>

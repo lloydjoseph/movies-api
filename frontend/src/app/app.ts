@@ -1,34 +1,22 @@
-import { Component, ElementRef, OnDestroy, ViewChild, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, ViewChild, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Title } from '@angular/platform-browser';
 import {
-  LucideArrowDown,
-  LucideArrowUp,
-  LucideArrowUpDown,
   LucideCircleUserRound,
-  LucideDownload,
-  LucideMinus,
   LucideMoon,
-  LucidePencil,
-  LucidePlus,
-  LucideSearch,
   LucideSun,
 } from '@lucide/angular';
-import { CatalogQuery, Movie, MovieApiService, MovieInput, MovieSort, SignedInUser, WatchlistItem, WatchlistPriority } from './movie-api.service';
+import { MovieApiService } from './movie-api.service';
+import type { Movie, MovieInput, SignedInUser, WatchlistItem } from './movie-api.service';
+import { CollectionComponent } from './collection/collection';
+import type { CollectionView, MovieDeletionRequest } from './collection/collection.models';
+import { ratingColor, ratingTextColor } from './movie-presentation';
+import { WatchlistComponent } from './watchlist/watchlist';
 
 type Theme = 'light' | 'dark';
-type SortDirection = 'ascending' | 'descending' | 'unsorted';
-type CollectionViewState = {
-  query: string;
-  sortBy: MovieSort;
-  selectedRatings: number[];
-  includeUnrated: boolean;
+type CollectionViewState = CollectionView & {
   activeTab: 'movies' | 'watchlist';
-};
-type PendingMovieDeletion = {
-  movie: Movie;
-  index: number;
 };
 type SaveConfirmation = {
   action: 'created' | 'updated';
@@ -37,7 +25,7 @@ type SaveConfirmation = {
   rating: number | null;
 };
 
-function isMovieSort(value: unknown): value is MovieSort {
+function isMovieSort(value: unknown): value is CollectionView['sortBy'] {
   return value === 'rating_desc' || value === 'rating_asc'
     || value === 'year_desc' || value === 'year_asc'
     || value === 'title_asc' || value === 'title_desc' || value === 'none';
@@ -45,20 +33,7 @@ function isMovieSort(value: unknown): value is MovieSort {
 
 @Component({
   selector: 'app-root',
-  imports: [
-    FormsModule,
-    LucideArrowDown,
-    LucideArrowUp,
-    LucideArrowUpDown,
-    LucideCircleUserRound,
-    LucideDownload,
-    LucideMinus,
-    LucideMoon,
-    LucidePencil,
-    LucidePlus,
-    LucideSearch,
-    LucideSun,
-  ],
+  imports: [FormsModule, LucideCircleUserRound, LucideMoon, LucideSun, CollectionComponent, WatchlistComponent],
   templateUrl: './app.html',
 })
 export class App implements OnDestroy {
@@ -66,59 +41,34 @@ export class App implements OnDestroy {
   private readonly documentTitle = inject(Title);
 
   readonly user = signal<SignedInUser | null>(null);
-  readonly movies = signal<Movie[]>([]);
-  readonly watchlist = signal<WatchlistItem[]>([]);
   readonly activeTab = signal<'movies' | 'watchlist'>('movies');
-  readonly watchlistLoading = signal(false);
-  readonly watchlistEditorOpen = signal(false);
-  readonly editingWatchlistItemId = signal<number | null>(null);
-  readonly deletingWatchlistItemId = signal<number | null>(null);
-  readonly savingWatchlistItem = signal(false);
+  readonly collectionView = signal<CollectionView>({
+    query: '',
+    sortBy: 'rating_desc',
+    selectedRatings: [],
+    includeUnrated: false,
+  });
+  readonly collectionReloadRequest = signal(0);
+  readonly movieDeletionRequest = signal<MovieDeletionRequest | null>(null);
+  readonly watchlistReloadRequest = signal(0);
+  readonly convertedWatchlistItemId = signal<number | null>(null);
   readonly pendingWatchlistItemId = signal<number | null>(null);
   readonly loading = signal(true);
-  readonly loadingMovies = signal(false);
-  readonly loadingMore = signal(false);
-  readonly exporting = signal(false);
-  readonly totalItems = signal(0);
-  readonly hasNext = signal(false);
-  readonly page = signal(0);
   readonly saving = signal(false);
   readonly error = signal(this.loginFailureMessage());
-  readonly query = signal('');
-  readonly sortBy = signal<MovieSort>('rating_desc');
-  readonly selectedRatings = signal<number[]>([]);
-  readonly includeUnrated = signal<boolean>(false);
   readonly editorOpen = signal(false);
   readonly editingMovie = signal<Movie | null>(null);
   readonly saveConfirmation = signal<SaveConfirmation | null>(null);
   readonly saveConfirmationFading = signal(false);
-  readonly deletingMovie = signal<Movie | null>(null);
-  readonly pendingMovieDeletion = signal<PendingMovieDeletion | null>(null);
   readonly theme = signal<Theme>(this.readThemePreference());
-  readonly editingWatchlistItem = computed(() =>
-    this.watchlist().find(item => item.id === this.editingWatchlistItemId()) ?? null);
-  readonly deletingWatchlistItem = computed(() =>
-    this.watchlist().find(item => item.id === this.deletingWatchlistItemId()) ?? null);
 
   title = '';
-  watchlistTitle = '';
-  watchlistNotes = '';
-  watchlistPriority: WatchlistPriority = 'MEDIUM';
-  editingWatchlistTitle = '';
-  editingWatchlistNotes = '';
-  editingWatchlistPriority: WatchlistPriority = 'MEDIUM';
   releaseYear: number | null = new Date().getFullYear();
   rating: number | null = null;
 
-  readonly visibleMovies = computed(() => this.movies());
-
   @ViewChild('editorDialog') private editorDialog?: ElementRef<HTMLDialogElement>;
-  @ViewChild('confirmationDialog') private confirmationDialog?: ElementRef<HTMLDialogElement>;
-  private readonly pageSize = 50;
-  private requestId = 0;
-  private watchlistRequestId = 0;
-  private queryTimer: ReturnType<typeof setTimeout> | null = null;
-  private pendingMovieDeleteTimer: ReturnType<typeof setTimeout> | null = null;
+  @ViewChild(CollectionComponent) private collectionComponent?: CollectionComponent;
+  private movieDeletionSequence = 0;
   private saveConfirmationTimer: ReturnType<typeof setTimeout> | null = null;
   private saveConfirmationDismissTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -128,12 +78,6 @@ export class App implements OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.queryTimer) clearTimeout(this.queryTimer);
-    if (this.pendingMovieDeletion()) {
-      void this.commitPendingMovieDeletion();
-    } else {
-      this.clearPendingMovieDeleteTimer();
-    }
     this.clearSaveConfirmationTimers();
   }
 
@@ -145,8 +89,6 @@ export class App implements OnDestroy {
       const user = await this.api.currentUser();
       this.user.set(user);
       this.restoreCollectionView(user.email);
-      await this.loadMovies(true);
-      if (this.activeTab() === 'watchlist') await this.loadWatchlist();
     } catch (error) {
       this.handleSessionError(error);
     } finally {
@@ -161,7 +103,7 @@ export class App implements OnDestroy {
   async signOut(): Promise<void> {
     this.error.set('');
     try {
-      if (this.pendingMovieDeletion() && !await this.commitPendingMovieDeletion()) return;
+      if (this.collectionComponent && !await this.collectionComponent.flushPendingDeletion()) return;
       await this.api.logout();
       this.clearAuthenticatedState();
     } catch (error) {
@@ -181,17 +123,10 @@ export class App implements OnDestroy {
     }
   }
 
-  onSortChange(value: string): void {
-    this.sortBy.set(value as MovieSort);
-    this.persistCollectionView();
-    void this.loadMovies(true);
-  }
-
   openCreateForm(): void {
     this.error.set('');
     this.pendingWatchlistItemId.set(null);
     this.editingMovie.set(null);
-    this.deletingMovie.set(null);
     this.title = '';
     this.releaseYear = new Date().getFullYear();
     this.rating = null;
@@ -203,115 +138,12 @@ export class App implements OnDestroy {
     this.activeTab.set(tab);
     this.persistCollectionView();
     this.updateDocumentTitle();
-    if (tab === 'watchlist') void this.loadWatchlist();
+    if (tab === 'watchlist') this.watchlistReloadRequest.update(request => request + 1);
   }
 
-  openWatchlistForm(): void {
-    this.error.set('');
-    this.watchlistTitle = '';
-    this.watchlistNotes = '';
-    this.watchlistPriority = 'MEDIUM';
-    this.editingWatchlistItemId.set(null);
-    this.watchlistEditorOpen.set(true);
-    this.showDialog(this.editorDialog?.nativeElement);
-  }
-
-  async saveWatchlistItem(): Promise<void> {
-    const name = this.watchlistTitle.trim();
-    if (!name || this.savingWatchlistItem()) return;
-
-    this.savingWatchlistItem.set(true);
-    this.error.set('');
-    try {
-      const item = await this.api.addWatchlistItem(
-        name, this.watchlistNotes.trim(), this.watchlistPriority);
-      this.watchlist.update(items => [...items, item].sort((a, b) => a.name.localeCompare(b.name)));
-      this.dismissWatchlistEditor();
-    } catch (error) {
-      this.error.set(this.errorMessage(error, 'Could not add the title to your watchlist. Please try again.'));
-    } finally {
-      this.savingWatchlistItem.set(false);
-    }
-  }
-
-  openWatchlistEdit(item: WatchlistItem): void {
-    this.error.set('');
-    this.watchlistEditorOpen.set(false);
-    this.editingWatchlistItemId.set(item.id);
-    this.editingWatchlistTitle = item.name;
-    this.editingWatchlistNotes = item.notes ?? '';
-    this.editingWatchlistPriority = item.priority;
-    this.showDialog(this.editorDialog?.nativeElement);
-  }
-
-  cancelWatchlistEdit(): void {
-    if (this.savingWatchlistItem()) return;
-    this.dismissWatchlistEditor();
-  }
-
-  closeWatchlistForm(): void {
-    if (this.savingWatchlistItem()) return;
-    this.dismissWatchlistEditor();
-  }
-
-  private dismissWatchlistEditor(): void {
-    this.watchlistEditorOpen.set(false);
-    this.editingWatchlistItemId.set(null);
-    this.watchlistTitle = '';
-    this.watchlistNotes = '';
-    this.watchlistPriority = 'MEDIUM';
-    this.editingWatchlistTitle = '';
-    this.editingWatchlistNotes = '';
-    this.editingWatchlistPriority = 'MEDIUM';
-    this.hideDialog(this.editorDialog?.nativeElement);
-  }
-
-  async saveWatchlistEdit(item: WatchlistItem): Promise<void> {
-    const name = this.editingWatchlistTitle.trim();
-    if (!name || this.savingWatchlistItem()) return;
-
-    this.savingWatchlistItem.set(true);
-    this.error.set('');
-    try {
-      const updated = await this.api.updateWatchlistItem(
-        item.id, name, this.editingWatchlistNotes.trim(), this.editingWatchlistPriority);
-      this.watchlist.update(items => items
-        .map(current => current.id === item.id ? updated : current)
-        .sort((a, b) => a.name.localeCompare(b.name)));
-      this.dismissWatchlistEditor();
-    } catch (error) {
-      this.error.set(this.errorMessage(error, 'Could not update the watchlist item. Please try again.'));
-    } finally {
-      this.savingWatchlistItem.set(false);
-    }
-  }
-
-  requestRemoveWatchlistItem(item: WatchlistItem): void {
-    this.error.set('');
-    this.cancelWatchlistEdit();
-    this.deletingWatchlistItemId.set(item.id);
-    this.showDialog(this.confirmationDialog?.nativeElement);
-  }
-
-  cancelRemoveWatchlistItem(): void {
-    this.deletingWatchlistItemId.set(null);
-    this.hideDialog(this.confirmationDialog?.nativeElement);
-  }
-
-  async confirmRemoveWatchlistItem(item: WatchlistItem): Promise<void> {
-    this.error.set('');
-    try {
-      await this.api.deleteWatchlistItem(item.id);
-      this.watchlist.update(items => items.filter(current => current.id !== item.id));
-      this.deletingWatchlistItemId.set(null);
-      this.hideDialog(this.confirmationDialog?.nativeElement);
-    } catch (error) {
-      this.error.set(this.errorMessage(error, 'Could not remove the title from your watchlist. Please try again.'));
-    }
-  }
-
-  priorityLabel(priority: WatchlistPriority): string {
-    return priority.charAt(0) + priority.slice(1).toLowerCase();
+  onCollectionViewChange(view: CollectionView): void {
+    this.collectionView.set(view);
+    this.persistCollectionView();
   }
 
   markWatchlistItemSeen(item: WatchlistItem): void {
@@ -319,7 +151,6 @@ export class App implements OnDestroy {
     this.selectTab('movies');
     this.pendingWatchlistItemId.set(item.id);
     this.editingMovie.set(null);
-    this.deletingMovie.set(null);
     this.title = item.name;
     this.releaseYear = new Date().getFullYear();
     this.rating = null;
@@ -327,9 +158,13 @@ export class App implements OnDestroy {
     this.showDialog(this.editorDialog?.nativeElement);
   }
 
+  onSessionExpired(): void {
+    this.error.set('Your session expired. Sign in again to continue.');
+    this.clearAuthenticatedState();
+  }
+
   openEditForm(movie: Movie): void {
     this.error.set('');
-    this.deletingMovie.set(null);
     this.editingMovie.set(movie);
     this.title = movie.name;
     this.releaseYear = movie.releaseYear;
@@ -339,110 +174,17 @@ export class App implements OnDestroy {
   }
 
   requestDelete(movie: Movie): void {
-    if (this.pendingMovieDeletion()) return;
     this.error.set('');
     if (this.editingMovie()?.id !== movie.id || !this.editorOpen()) {
       this.editingMovie.set(null);
       this.editorOpen.set(false);
       this.hideDialog(this.editorDialog?.nativeElement);
     }
-    this.deletingMovie.set(movie);
-    this.showDialog(this.confirmationDialog?.nativeElement);
+    this.movieDeletionRequest.set({ movie, sequence: ++this.movieDeletionSequence });
   }
 
-  cancelDelete(): void {
-    this.deletingMovie.set(null);
-    this.hideDialog(this.confirmationDialog?.nativeElement);
-  }
-
-  onQueryChange(value: string): void {
-    this.query.set(value);
-    this.persistCollectionView();
-    if (this.queryTimer !== null) clearTimeout(this.queryTimer);
-    this.queryTimer = setTimeout(() => void this.loadMovies(true), 250);
-  }
-
-  isAllSelected(): boolean {
-    return this.selectedRatings().length === 0 && !this.includeUnrated();
-  }
-
-  isRatingSelected(score: number): boolean {
-    return this.selectedRatings().includes(score);
-  }
-
-  isUnratedSelected(): boolean {
-    return this.includeUnrated();
-  }
-
-  selectAllRatings(): void {
-    this.selectedRatings.set([]);
-    this.includeUnrated.set(false);
-    this.persistCollectionView();
-    void this.loadMovies(true);
-  }
-
-  toggleRating(score: number): void {
-    const current = this.selectedRatings();
-    if (current.includes(score)) {
-      this.selectedRatings.set(current.filter(s => s !== score));
-    } else {
-      this.selectedRatings.set([...current, score].sort((a, b) => b - a));
-    }
-    this.persistCollectionView();
-    void this.loadMovies(true);
-  }
-
-  toggleUnrated(): void {
-    this.includeUnrated.update(val => !val);
-    this.persistCollectionView();
-    void this.loadMovies(true);
-  }
-
-  setSort(sort: MovieSort): void {
-    this.sortBy.set(sort);
-    this.persistCollectionView();
-    void this.loadMovies(true);
-  }
-
-  sortDirection(field: 'rating' | 'year' | 'title'): SortDirection {
-    const current = this.sortBy();
-    if (field === 'rating') {
-      if (current === 'rating_desc') return 'descending';
-      if (current === 'rating_asc') return 'ascending';
-      return 'unsorted';
-    }
-    if (field === 'year') {
-      if (current === 'year_desc') return 'descending';
-      if (current === 'year_asc') return 'ascending';
-      return 'unsorted';
-    }
-    if (field === 'title') {
-      if (current === 'title_asc') return 'ascending';
-      if (current === 'title_desc') return 'descending';
-      return 'unsorted';
-    }
-    return 'unsorted';
-  }
-
-  toggleSort(field: 'rating' | 'year' | 'title'): void {
-    const current = this.sortBy();
-    if (field === 'rating') {
-      if (current === 'rating_desc') this.setSort('rating_asc');
-      else if (current === 'rating_asc') this.setSort('none');
-      else this.setSort('rating_desc');
-    } else if (field === 'year') {
-      if (current === 'year_desc') this.setSort('year_asc');
-      else if (current === 'year_asc') this.setSort('none');
-      else this.setSort('year_desc');
-    } else if (field === 'title') {
-      if (current === 'title_asc') this.setSort('title_desc');
-      else if (current === 'title_desc') this.setSort('none');
-      else this.setSort('title_asc');
-    }
-  }
-
-  loadMore(): void {
-    if (this.hasNext() && !this.loadingMore()) void this.loadMovies(false);
+  onMovieDeletionConfirmed(movie: Movie): void {
+    if (this.editingMovie()?.id === movie.id) this.dismissMovieEditor();
   }
 
   closeEditor(): void {
@@ -453,27 +195,11 @@ export class App implements OnDestroy {
   onEditorDialogCancel(event: Event): void {
     event.preventDefault();
     if (this.editorOpen()) this.closeEditor();
-    else if (this.watchlistEditorOpen()) this.closeWatchlistForm();
-    else if (this.editingWatchlistItemId() !== null) this.cancelWatchlistEdit();
   }
 
   onEditorDialogClick(event: MouseEvent): void {
     if (event.target !== event.currentTarget) return;
     if (this.editorOpen()) this.closeEditor();
-    else if (this.watchlistEditorOpen()) this.closeWatchlistForm();
-    else if (this.editingWatchlistItemId() !== null) this.cancelWatchlistEdit();
-  }
-
-  onConfirmationDialogCancel(event: Event): void {
-    event.preventDefault();
-    if (this.deletingMovie()) this.cancelDelete();
-    else this.cancelRemoveWatchlistItem();
-  }
-
-  onConfirmationDialogClick(event: MouseEvent): void {
-    if (event.target !== event.currentTarget) return;
-    if (this.deletingMovie()) this.cancelDelete();
-    else this.cancelRemoveWatchlistItem();
   }
 
   private dismissMovieEditor(): void {
@@ -533,9 +259,9 @@ export class App implements OnDestroy {
         }, 300);
         this.saveConfirmationTimer = null;
       }, 2700);
-      await this.reloadMovies();
+      this.collectionReloadRequest.update(request => request + 1);
       if (watchlistItemId !== null) {
-        this.watchlist.update(items => items.filter(item => item.id !== watchlistItemId));
+        this.convertedWatchlistItemId.set(watchlistItemId);
       }
     } catch (error) {
       this.error.set(this.errorMessage(
@@ -561,117 +287,12 @@ export class App implements OnDestroy {
     this.saveConfirmationDismissTimer = null;
   }
 
-  confirmDelete(): void {
-    const movie = this.deletingMovie();
-    if (!movie || this.pendingMovieDeletion()) return;
-
-    this.error.set('');
-    const index = this.movies().findIndex(current => current.id === movie.id);
-    this.cancelDelete();
-    if (this.editingMovie()?.id === movie.id) this.dismissMovieEditor();
-    if (index >= 0) {
-      this.movies.update(current => current.filter(item => item.id !== movie.id));
-      this.totalItems.update(count => Math.max(0, count - 1));
-    }
-    this.pendingMovieDeletion.set({ movie, index });
-    this.pendingMovieDeleteTimer = setTimeout(() => void this.commitPendingMovieDeletion(), 5000);
-  }
-
-  async undoMovieDeletion(): Promise<void> {
-    const pending = this.pendingMovieDeletion();
-    if (!pending) return;
-
-    this.error.set('');
-    this.clearPendingMovieDeleteTimer();
-    this.pendingMovieDeletion.set(null);
-    if (pending.index >= 0) {
-      this.movies.update(current => current.some(movie => movie.id === pending.movie.id)
-        ? current
-        : [...current.slice(0, pending.index), pending.movie, ...current.slice(pending.index)]);
-      this.totalItems.update(count => count + 1);
-    }
-    await this.reloadMovies();
-  }
-
-  async exportMovies(): Promise<void> {
-    if (this.exporting() || this.pendingMovieDeletion()) return;
-
-    this.exporting.set(true);
-    this.error.set('');
-    try {
-      const movies: Movie[] = [];
-      let page = 0;
-      while (true) {
-        const result = await this.api.listMovies({
-          page,
-          size: 100,
-          title: '',
-          sort: 'none',
-        });
-        movies.push(...result.items);
-        if (!result.hasNext) break;
-        page = result.page + 1;
-      }
-
-      const rows = [
-        ['Title', 'Release year', 'Rating'].map(value => this.csvField(value)).join(','),
-        ...movies.map(movie => [
-          this.csvField(movie.name),
-          this.csvField(movie.releaseYear),
-          this.csvField(movie.rating),
-        ].join(',')),
-      ];
-      const blob = new Blob([`\uFEFF${rows.join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = objectUrl;
-      link.download = `movies-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-    } catch (error) {
-      this.error.set(this.errorMessage(error, 'Could not export your movies. Please try again.'));
-    } finally {
-      this.exporting.set(false);
-    }
-  }
-
   ratingColor(value: number | null): string {
-    if (value === null) return '#e8e6e1';
-    const colors = ['#c75146', '#cf6748', '#d77d4a', '#df944c', '#dba84e', '#bdad50', '#98ad54', '#72a95c', '#50a36a', '#319875'];
-    return colors[value - 1] ?? '#e8e6e1';
+    return ratingColor(value);
   }
 
   ratingTextColor(value: number | null): string {
-    return value !== null && value >= 5 ? '#173d32' : '#54251f';
-  }
-
-  private async commitPendingMovieDeletion(): Promise<boolean> {
-    const pending = this.pendingMovieDeletion();
-    if (!pending) return true;
-
-    this.clearPendingMovieDeleteTimer();
-    this.pendingMovieDeletion.set(null);
-    try {
-      await this.api.deleteMovie(pending.movie.id);
-      await this.reloadMovies();
-      return true;
-    } catch (error) {
-      const message = this.errorMessage(error, 'Could not remove the movie. Please try again.');
-      await this.reloadMovies();
-      this.error.set(message);
-      return false;
-    }
-  }
-
-  private clearPendingMovieDeleteTimer(): void {
-    if (this.pendingMovieDeleteTimer) clearTimeout(this.pendingMovieDeleteTimer);
-    this.pendingMovieDeleteTimer = null;
-  }
-
-  private async reloadMovies(): Promise<void> {
-    await this.loadMovies(true);
+    return ratingTextColor(value);
   }
 
   private restoreCollectionView(email: string): void {
@@ -682,14 +303,19 @@ export class App implements OnDestroy {
       if (typeof parsed !== 'object' || parsed === null) return;
       const state = parsed as Record<string, unknown>;
 
-      if (typeof state['query'] === 'string') this.query.set(state['query'].slice(0, 100));
-      if (isMovieSort(state['sortBy'])) this.sortBy.set(state['sortBy']);
+      const current = this.collectionView();
+      const restored: CollectionView = {
+        ...current,
+        query: typeof state['query'] === 'string' ? state['query'].slice(0, 100) : current.query,
+        sortBy: isMovieSort(state['sortBy']) ? state['sortBy'] : current.sortBy,
+      };
       if (Array.isArray(state['selectedRatings'])) {
         const ratings = state['selectedRatings'].filter((value): value is number =>
           typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 10);
-        this.selectedRatings.set([...new Set(ratings)].sort((a, b) => b - a));
+        restored.selectedRatings = [...new Set(ratings)].sort((a, b) => b - a);
       }
-      if (typeof state['includeUnrated'] === 'boolean') this.includeUnrated.set(state['includeUnrated']);
+      if (typeof state['includeUnrated'] === 'boolean') restored.includeUnrated = state['includeUnrated'];
+      this.collectionView.set(restored);
       if (state['activeTab'] === 'movies' || state['activeTab'] === 'watchlist') {
         this.activeTab.set(state['activeTab']);
         this.updateDocumentTitle();
@@ -703,10 +329,7 @@ export class App implements OnDestroy {
     const email = this.user()?.email;
     if (!email) return;
     const state: CollectionViewState = {
-      query: this.query(),
-      sortBy: this.sortBy(),
-      selectedRatings: this.selectedRatings(),
-      includeUnrated: this.includeUnrated(),
+      ...this.collectionView(),
       activeTab: this.activeTab(),
     };
     try {
@@ -718,70 +341,6 @@ export class App implements OnDestroy {
 
   private collectionViewStorageKey(email: string): string {
     return `josephs-movies-view:${encodeURIComponent(email.trim().toLowerCase())}`;
-  }
-
-  private csvField(value: string | number | null): string {
-    if (value === null) return '';
-    const text = String(value);
-    const safeText = /^[\t\r\n ]*[=+\-@]/.test(text) ? `'${text}` : text;
-    return `"${safeText.replaceAll('"', '""')}"`;
-  }
-
-  private async loadMovies(reset: boolean): Promise<void> {
-    const requestId = ++this.requestId;
-    const requestedPage = reset ? 0 : this.page() + 1;
-    if (reset) {
-      this.loadingMovies.set(true);
-      this.loadingMore.set(false);
-      if (this.movies().length === 0) {
-        this.totalItems.set(0);
-        this.hasNext.set(false);
-      }
-    } else {
-      this.loadingMore.set(true);
-    }
-    this.error.set('');
-
-    const query: CatalogQuery = {
-      page: requestedPage,
-      size: this.pageSize,
-      title: this.query(),
-      ratings: this.selectedRatings(),
-      includeUnrated: this.includeUnrated(),
-      sort: this.sortBy(),
-    };
-
-    try {
-      const result = await this.api.listMovies(query);
-      if (requestId !== this.requestId) return;
-      this.movies.update(current => reset ? result.items : [...current, ...result.items]);
-      this.totalItems.set(result.totalItems);
-      this.page.set(result.page);
-      this.hasNext.set(result.hasNext);
-    } catch (error) {
-      if (requestId === this.requestId) this.error.set(this.errorMessage(error, 'Could not load your movies. Please try again.'));
-    } finally {
-      if (requestId === this.requestId) {
-        this.loadingMovies.set(false);
-        this.loadingMore.set(false);
-      }
-    }
-  }
-
-  private async loadWatchlist(): Promise<void> {
-    const requestId = ++this.watchlistRequestId;
-    this.watchlistLoading.set(true);
-    this.error.set('');
-    try {
-      const items = await this.api.listWatchlist();
-      if (requestId === this.watchlistRequestId) this.watchlist.set(items);
-    } catch (error) {
-      if (requestId === this.watchlistRequestId) {
-        this.error.set(this.errorMessage(error, 'Could not load your watchlist. Please try again.'));
-      }
-    } finally {
-      if (requestId === this.watchlistRequestId) this.watchlistLoading.set(false);
-    }
   }
 
   private updateDocumentTitle(): void {
@@ -815,29 +374,14 @@ export class App implements OnDestroy {
 
   private clearAuthenticatedState(): void {
     this.user.set(null);
-    this.movies.set([]);
-    this.watchlist.set([]);
-    this.totalItems.set(0);
     this.editorOpen.set(false);
     this.editingMovie.set(null);
     this.pendingWatchlistItemId.set(null);
-    this.watchlistEditorOpen.set(false);
-    this.editingWatchlistItemId.set(null);
-    this.deletingMovie.set(null);
-    this.deletingWatchlistItemId.set(null);
-    this.pendingMovieDeletion.set(null);
+    this.convertedWatchlistItemId.set(null);
+    this.movieDeletionRequest.set(null);
     this.saveConfirmation.set(null);
-    this.clearPendingMovieDeleteTimer();
     this.clearSaveConfirmationTimers();
-    if (this.queryTimer !== null) clearTimeout(this.queryTimer);
-    this.queryTimer = null;
-    this.requestId += 1;
-    this.watchlistRequestId += 1;
-    this.loadingMovies.set(false);
-    this.loadingMore.set(false);
-    this.watchlistLoading.set(false);
     this.hideDialog(this.editorDialog?.nativeElement);
-    this.hideDialog(this.confirmationDialog?.nativeElement);
   }
 
   private readThemePreference(): Theme {

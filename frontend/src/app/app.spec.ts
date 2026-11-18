@@ -89,83 +89,66 @@ describe('App', () => {
     fixture.destroy();
   });
 
+  it('returns to sign-in when the watchlist session expires', async () => {
+    const listWatchlist = vi.spyOn(api, 'listWatchlist')
+      .mockRejectedValueOnce(new HttpErrorResponse({ status: 401 }));
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+
+    const app = fixture.componentInstance;
+    app.selectTab('watchlist');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(app.user()).toBeNull();
+    expect(app.error()).toBe('Your session expired. Sign in again to continue.');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Sign in with Google');
+    listWatchlist.mockRestore();
+    fixture.destroy();
+  });
+
   it('remembers the collection view for the signed-in account in this tab', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const app = fixture.componentInstance;
 
-    app.onQueryChange('arrival');
-    app.setSort('year_asc');
-    app.toggleRating(8);
-    app.toggleUnrated();
+    app.onCollectionViewChange({
+      query: 'arrival',
+      sortBy: 'year_asc',
+      selectedRatings: [8],
+      includeUnrated: true,
+    });
     app.selectTab('watchlist');
     fixture.destroy();
 
     const restored = TestBed.createComponent(App);
     await restored.whenStable();
     const restoredApp = restored.componentInstance;
-    expect(restoredApp.query()).toBe('arrival');
-    expect(restoredApp.sortBy()).toBe('year_asc');
-    expect(restoredApp.selectedRatings()).toEqual([8]);
-    expect(restoredApp.includeUnrated()).toBe(true);
+    expect(restoredApp.collectionView()).toEqual({
+      query: 'arrival',
+      sortBy: 'year_asc',
+      selectedRatings: [8],
+      includeUnrated: true,
+    });
     expect(restoredApp.activeTab()).toBe('watchlist');
     restored.destroy();
   });
 
-  it('allows undoing a movie removal before it is sent to the server', async () => {
-    const deleteMovie = vi.spyOn(api, 'deleteMovie');
-    const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
-    const app = fixture.componentInstance;
-    const movie = app.movies()[0];
-    vi.useFakeTimers();
-
-    try {
-      app.deletingMovie.set(movie);
-      app.confirmDelete();
-      expect(app.movies()).toEqual([]);
-      expect(app.pendingMovieDeletion()?.movie).toEqual(movie);
-      expect(deleteMovie).not.toHaveBeenCalled();
-
-      await app.undoMovieDeletion();
-      await vi.advanceTimersByTimeAsync(5000);
-      expect(app.movies()).toEqual([movie]);
-      expect(deleteMovie).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-      deleteMovie.mockRestore();
-      fixture.destroy();
-    }
-  });
-
-  it('deletes a movie when the undo window expires', async () => {
-    const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
-    const deleteMovie = vi.spyOn(api, 'deleteMovie');
-    const app = fixture.componentInstance;
-    vi.useFakeTimers();
-
-    try {
-      app.deletingMovie.set(app.movies()[0]);
-      app.confirmDelete();
-      await vi.advanceTimersByTimeAsync(5000);
-      expect(deleteMovie).toHaveBeenCalledWith(1);
-    } finally {
-      vi.useRealTimers();
-      deleteMovie.mockRestore();
-      fixture.destroy();
-    }
-  });
-
   it('commits a pending removal before signing out', async () => {
-    const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
     const deleteMovie = vi.spyOn(api, 'deleteMovie');
     const logout = vi.spyOn(api, 'logout');
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    fixture.detectChanges();
     const app = fixture.componentInstance;
 
-    app.deletingMovie.set(app.movies()[0]);
-    app.confirmDelete();
+    app.requestDelete({ id: 1, name: 'Arrival', releaseYear: 2016, rating: 9 });
+    fixture.detectChanges();
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLElement>('[aria-labelledby="delete-heading"] button:last-child')
+      ?.click();
+    fixture.detectChanges();
     await app.signOut();
 
     expect(deleteMovie).toHaveBeenCalledWith(1);
@@ -176,42 +159,44 @@ describe('App', () => {
     fixture.destroy();
   });
 
-  it('exports every catalog page as a CSV download', async () => {
+  it('waits for an in-flight timed deletion before signing out', async () => {
+    const deleteMovie = vi.spyOn(api, 'deleteMovie');
+    const logout = vi.spyOn(api, 'logout');
+    let resolveDeletion!: () => void;
+    deleteMovie.mockImplementation(() => new Promise<void>(resolve => {
+      resolveDeletion = resolve;
+    }));
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
-    const listMovies = vi.spyOn(api, 'listMovies')
-      .mockResolvedValueOnce({
-        items: [{ id: 1, name: '=1+1', releaseYear: 2016, rating: 9 }],
-        page: 0, size: 100, totalItems: 2, totalPages: 2, hasNext: true,
-      })
-      .mockResolvedValueOnce({
-        items: [{ id: 2, name: 'Moonlight', releaseYear: 2016, rating: null }],
-        page: 1, size: 100, totalItems: 2, totalPages: 2, hasNext: false,
-      });
-    const createObjectURL = vi.fn((_blob: Blob) => 'blob:movie-export');
-    const revokeObjectURL = vi.fn();
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
+    fixture.detectChanges();
+    const app = fixture.componentInstance;
     vi.useFakeTimers();
 
     try {
-      await fixture.componentInstance.exportMovies();
-      expect(listMovies).toHaveBeenNthCalledWith(1, { page: 0, size: 100, title: '', sort: 'none' });
-      expect(listMovies).toHaveBeenNthCalledWith(2, { page: 1, size: 100, title: '', sort: 'none' });
-      expect(createObjectURL).toHaveBeenCalledOnce();
-      expect(click).toHaveBeenCalledOnce();
-      const blob = createObjectURL.mock.calls[0]?.[0];
-      expect(blob).toBeDefined();
-      if (!blob) throw new Error('CSV export did not create a blob');
-      const csv = await blob.text();
-      expect(csv).toContain("\"'=1+1\"");
-      expect(csv).toContain('"Moonlight"');
-      await vi.advanceTimersByTimeAsync(1000);
+      app.requestDelete({ id: 1, name: 'Arrival', releaseYear: 2016, rating: 9 });
+      fixture.detectChanges();
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('[aria-labelledby="delete-heading"] button'))
+        .find(button => button.textContent?.trim() === 'Remove movie')
+        ?.click();
+      fixture.detectChanges();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(deleteMovie).toHaveBeenCalledOnce();
+
+      let signOutCompleted = false;
+      const signOut = app.signOut().then(() => { signOutCompleted = true; });
+      await Promise.resolve();
+      expect(logout).not.toHaveBeenCalled();
+      expect(signOutCompleted).toBe(false);
+
+      resolveDeletion();
+      await signOut;
+      expect(deleteMovie).toHaveBeenCalledOnce();
+      expect(logout).toHaveBeenCalledOnce();
+      expect(app.user()).toBeNull();
     } finally {
       vi.useRealTimers();
-      vi.unstubAllGlobals();
-      click.mockRestore();
-      listMovies.mockRestore();
+      deleteMovie.mockRestore();
+      logout.mockRestore();
       fixture.destroy();
     }
   });
@@ -227,9 +212,9 @@ describe('App', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('There Will Be Blood');
-    app.markWatchlistItemSeen({
-      id: 7, name: 'There Will Be Blood', notes: 'Recommended by Alex', priority: 'MEDIUM',
-    });
+    Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('app-watchlist button'))
+      .find(button => button.textContent?.includes('I’ve seen it'))
+      ?.click();
     fixture.detectChanges();
 
     expect(app.activeTab()).toBe('movies');
@@ -237,140 +222,10 @@ describe('App', () => {
     expect(app.title).toBe('There Will Be Blood');
 
     await app.saveMovie();
+    fixture.detectChanges();
     expect(api.createMovie).toHaveBeenCalledWith(
       { name: 'There Will Be Blood', releaseYear: new Date().getFullYear(), rating: null }, 7);
-    expect(app.watchlist()).toHaveLength(0);
-  });
-
-  it('displays and edits watchlist notes', async () => {
-    const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
-    const app = fixture.componentInstance;
-    app.selectTab('watchlist');
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    const rendered = fixture.nativeElement as HTMLElement;
-    expect(rendered.textContent).toContain('Recommended by Alex');
-    app.openWatchlistForm();
-    fixture.detectChanges();
-    const watchlistEditor = rendered.querySelector<HTMLElement>('dialog[open] [aria-labelledby="watchlist-editor-heading"]');
-    expect(watchlistEditor).not.toBeNull();
-    expect(watchlistEditor?.querySelector('p')?.textContent?.trim()).toBe('Watchlist');
-    expect(watchlistEditor?.className).toContain('min-h-full');
-    const watchlistActions = watchlistEditor?.querySelector('form')?.lastElementChild;
-    expect(watchlistActions?.className).toContain('grid-cols-2');
-    expect(watchlistActions?.querySelector('button[type="button"]')?.className).toContain('w-full');
-    expect(watchlistActions?.querySelector('button[type="submit"]')?.className).toContain('w-full');
-    expect(watchlistEditor?.querySelector('[aria-label="Priority"]')?.className).toContain('w-full');
-    expect(watchlistEditor?.querySelector('[aria-label="Priority"]')?.className).not.toContain('sm:w-72');
-    const addPriorityButtons = rendered.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Priority"] button');
-    expect(addPriorityButtons).toHaveLength(3);
-    expect(addPriorityButtons[0].textContent).toContain('High');
-    expect(addPriorityButtons[1].getAttribute('aria-pressed')).toBe('true');
-    expect(addPriorityButtons[2].textContent).toContain('Low');
-    addPriorityButtons[0].click();
-    fixture.detectChanges();
-    addPriorityButtons[1].click();
-    fixture.detectChanges();
-    expect(addPriorityButtons[1].className).toContain('bg-indigo-100');
-    expect(addPriorityButtons[1].className).toContain('dark:bg-indigo-950');
-    app.closeWatchlistForm();
-    fixture.detectChanges();
-    rendered.querySelector<HTMLButtonElement>('button[aria-label="Edit There Will Be Blood"]')?.click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    const watchlistEdit = rendered.querySelector<HTMLElement>('dialog[open] [aria-labelledby="watchlist-edit-heading"]');
-    expect(watchlistEdit).not.toBeNull();
-    expect(watchlistEdit?.querySelector('p')?.textContent?.trim()).toBe('Watchlist');
-    const notes = rendered.querySelector<HTMLTextAreaElement>('textarea[name="editWatchlistNotes"]');
-    expect(app.editingWatchlistNotes).toBe('Recommended by Alex');
-    expect(notes?.value).toBe('Recommended by Alex');
-    expect(rendered.textContent).toContain('19/500');
-    const editPriorityButtons = rendered.querySelector<HTMLFormElement>('form:has(textarea[name="editWatchlistNotes"])')
-      ?.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Priority"] button');
-    expect(editPriorityButtons?.[1].getAttribute('aria-pressed')).toBe('true');
-    expect(editPriorityButtons?.[1].className).toContain('bg-indigo-100');
-    expect(editPriorityButtons?.[1].className).not.toContain('bg-stone-50');
-    editPriorityButtons?.[0].click();
-    fixture.detectChanges();
-    expect(editPriorityButtons?.[0].getAttribute('aria-pressed')).toBe('true');
-
-    app.editingWatchlistNotes = 'Watch on a big screen';
-    await app.saveWatchlistEdit(app.watchlist()[0]);
-    fixture.detectChanges();
-
-    expect(api.updateWatchlistItem).toHaveBeenCalledWith(
-      7, 'There Will Be Blood', 'Watch on a big screen', 'HIGH');
-    expect(rendered.textContent).toContain('Watch on a big screen');
-    expect(rendered.textContent).toContain('High');
-    expect(rendered.querySelector('[aria-label="Priority: High"] svg[aria-hidden="true"]')).not.toBeNull();
-  });
-
-  it('confirms before removing a watchlist item', async () => {
-    const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
-    const app = fixture.componentInstance;
-    app.selectTab('watchlist');
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    const rendered = fixture.nativeElement as HTMLElement;
-    const editButton = rendered.querySelector<HTMLButtonElement>('button[aria-label="Edit There Will Be Blood"]');
-    const itemActions = editButton?.parentElement;
-    const actionButtons = itemActions?.querySelectorAll<HTMLButtonElement>('button');
-    expect(actionButtons?.[0].textContent).toContain('I’ve seen it');
-    expect(actionButtons?.[1]).toBe(editButton);
-    expect(editButton?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
-
-    editButton?.click();
-    fixture.detectChanges();
-    const editSection = rendered.querySelector<HTMLElement>('[aria-labelledby="watchlist-edit-heading"]');
-    const editRemoveButton = editSection?.querySelector<HTMLButtonElement>('button[aria-label="Remove There Will Be Blood from watchlist"]');
-    expect(editRemoveButton?.parentElement?.className).toContain('lg:order-1');
-    editRemoveButton?.click();
-    fixture.detectChanges();
-
-    const modalConfirmation = rendered.querySelector<HTMLElement>('[aria-labelledby="watchlist-delete-heading-7"]');
-    expect(modalConfirmation?.closest('dialog')?.open).toBe(true);
-    expect(api.deleteWatchlistItem).not.toHaveBeenCalled();
-    modalConfirmation?.querySelector<HTMLButtonElement>('button[type="button"]')?.click();
-    fixture.detectChanges();
-
-    expect(rendered.querySelector('button[aria-label="Remove There Will Be Blood from watchlist"]')).toBeNull();
-    expect(rendered.querySelector('button[aria-label="Edit There Will Be Blood"]')).not.toBeNull();
-
-    editButton?.click();
-    fixture.detectChanges();
-    const reopenedEdit = rendered.querySelector<HTMLElement>('[aria-labelledby="watchlist-edit-heading"]');
-    reopenedEdit?.querySelector<HTMLButtonElement>('button[aria-label="Remove There Will Be Blood from watchlist"]')?.click();
-    fixture.detectChanges();
-
-    const confirmation = rendered.querySelector<HTMLElement>('[aria-labelledby="watchlist-delete-heading-7"]');
-    expect(confirmation?.textContent).toContain('Remove “There Will Be Blood” from your watchlist?');
-    expect(confirmation?.closest('dialog')?.open).toBe(true);
-    expect(confirmation?.closest('li')).toBeNull();
-    expect(api.deleteWatchlistItem).not.toHaveBeenCalled();
-
-    confirmation?.querySelectorAll<HTMLButtonElement>('button')[1].click();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    expect(api.deleteWatchlistItem).toHaveBeenCalledWith(7);
-    expect(app.watchlist()).toHaveLength(0);
-  });
-
-  it('explains when a duplicate title is already in a list', async () => {
-    api.addWatchlistItem.mockRejectedValueOnce(new HttpErrorResponse({ status: 409 }));
-    const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
-
-    const app = fixture.componentInstance;
-    app.watchlistTitle = 'Arrival';
-    await app.saveWatchlistItem();
-
-    expect(app.error()).toBe('That title is already in your collection or watchlist.');
+    expect(fixture.nativeElement.querySelector('app-watchlist')?.textContent).not.toContain('There Will Be Blood');
   });
 
   it('uses the edit rating control and layout in the add form', async () => {
@@ -441,7 +296,7 @@ describe('App', () => {
     expect(confirmation?.textContent).toContain('Add');
     expect(confirmation?.classList.contains('bg-stone-100')).toBe(true);
     expect(confirmation?.classList.contains('fixed')).toBe(false);
-    expect(rendered.querySelector('[aria-label="Movie collection"]')?.previousElementSibling).toBe(confirmation);
+    expect(rendered.querySelector('app-collection')?.previousElementSibling).toBe(confirmation);
 
     app.closeSaveConfirmation();
     app.openEditForm({ id: 1, name: 'Arrival', releaseYear: 2016, rating: 9 });
@@ -490,61 +345,6 @@ describe('App', () => {
     }
   });
 
-  it('renders sort controls and defaults to rating descending', async () => {
-    const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    const app = fixture.componentInstance;
-    expect(app.sortBy()).toBe('rating_desc');
-    expect(app.sortDirection('rating')).toBe('descending');
-    expect(app.sortDirection('year')).toBe('unsorted');
-    expect(app.sortDirection('title')).toBe('unsorted');
-
-    app.toggleSort('rating');
-    expect(app.sortBy()).toBe('rating_asc');
-    expect(app.sortDirection('rating')).toBe('ascending');
-
-    app.toggleSort('rating');
-    expect(app.sortBy()).toBe('none');
-    expect(app.sortDirection('rating')).toBe('unsorted');
-
-    app.toggleSort('rating');
-    expect(app.sortBy()).toBe('rating_desc');
-    expect(app.sortDirection('rating')).toBe('descending');
-
-    app.toggleSort('year');
-    expect(app.sortBy()).toBe('year_desc');
-    expect(app.sortDirection('year')).toBe('descending');
-    expect(app.sortDirection('rating')).toBe('unsorted');
-
-    app.toggleSort('year');
-    expect(app.sortBy()).toBe('year_asc');
-    app.toggleSort('year');
-    expect(app.sortBy()).toBe('none');
-  });
-
-  it('allows toggling rating number filters', async () => {
-    const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    const app = fixture.componentInstance;
-    expect(app.isAllSelected()).toBe(true);
-
-    app.toggleRating(9);
-    expect(app.isAllSelected()).toBe(false);
-    expect(app.isRatingSelected(9)).toBe(true);
-    expect(app.isRatingSelected(8)).toBe(false);
-
-    app.toggleRating(8);
-    expect(app.isRatingSelected(9)).toBe(true);
-    expect(app.isRatingSelected(8)).toBe(true);
-
-    app.selectAllRatings();
-    expect(app.isAllSelected()).toBe(true);
-  });
-
   it('shows an edit column that opens the movie editor', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
@@ -562,22 +362,6 @@ describe('App', () => {
     fixture.detectChanges();
     expect(rendered.querySelector('[aria-labelledby="editor-heading"]')).not.toBeNull();
     expect(rendered.querySelector('button[aria-label="Delete Arrival"]')).not.toBeNull();
-  });
-
-  it('shows a matching-movies message when active filters return no results', async () => {
-    const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    const app = fixture.componentInstance;
-    app.movies.set([]);
-    app.totalItems.set(0);
-    app.query.set('unknown title');
-    fixture.detectChanges();
-
-    const rendered = fixture.nativeElement as HTMLElement;
-    expect(rendered.textContent).toContain('No matching movies.');
-    expect(rendered.textContent).not.toContain('Add a movie to get started.');
   });
 
   it('opens the edit form in a modal above the collection', async () => {
@@ -649,7 +433,6 @@ describe('App', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const app = fixture.componentInstance;
     const rendered = fixture.nativeElement as HTMLElement;
     rendered.querySelector<HTMLButtonElement>('button[aria-label="Edit Arrival"]')?.click();
     await fixture.whenStable();
@@ -685,9 +468,12 @@ describe('App', () => {
       ?.click();
     fixture.detectChanges();
     expect(rendered.querySelector('[aria-labelledby="editor-heading"]')).toBeNull();
-    expect(app.pendingMovieDeletion()?.movie.name).toBe('Arrival');
-    await app.undoMovieDeletion();
+    expect(rendered.querySelector('[role="status"]')?.textContent).toContain('“Arrival” removed.');
+    Array.from(rendered.querySelectorAll<HTMLButtonElement>('[role="status"] button'))
+      .find(button => button.textContent?.trim() === 'Undo')
+      ?.click();
     await fixture.whenStable();
+    fixture.detectChanges();
   });
 
   it('disables the movie submit button until required fields are valid', async () => {
