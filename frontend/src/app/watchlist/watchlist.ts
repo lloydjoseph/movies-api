@@ -3,10 +3,12 @@ import { Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleCh
 import { FormsModule } from '@angular/forms';
 import { LucideArrowDown, LucideArrowUp, LucideMinus, LucidePencil, LucidePlus } from '@lucide/angular';
 import { MovieApiService, WatchlistItem, WatchlistPriority } from '../movie-api.service';
+import { MovieLookupComponent } from '../movie-lookup/movie-lookup';
+import type { MovieLookupResult } from '../movie-api.service';
 
 @Component({
   selector: 'app-watchlist',
-  imports: [FormsModule, LucideArrowDown, LucideArrowUp, LucideMinus, LucidePencil, LucidePlus],
+  imports: [FormsModule, LucideArrowDown, LucideArrowUp, LucideMinus, LucidePencil, LucidePlus, MovieLookupComponent],
   templateUrl: './watchlist.html',
 })
 export class WatchlistComponent implements OnChanges {
@@ -32,6 +34,7 @@ export class WatchlistComponent implements OnChanges {
     this.items().find(item => item.id === this.deletingItemId()) ?? null);
 
   title = '';
+  lookupResultsVisible = false;
   notes = '';
   priority: WatchlistPriority = 'MEDIUM';
   editingTitle = '';
@@ -70,11 +73,17 @@ export class WatchlistComponent implements OnChanges {
   openAddForm(): void {
     this.error.set('');
     this.title = '';
+    this.lookupResultsVisible = false;
     this.notes = '';
     this.priority = 'MEDIUM';
     this.editingItemId.set(null);
     this.addEditorOpen.set(true);
     this.showDialog(this.editorDialog?.nativeElement);
+  }
+
+  onMovieLookupSelected(movie: MovieLookupResult): void {
+    this.title = movie.title;
+    this.lookupResultsVisible = false;
   }
 
   async saveNewItem(): Promise<void> {

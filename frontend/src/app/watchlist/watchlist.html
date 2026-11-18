@@ -69,9 +69,18 @@
         <h2 id="watchlist-editor-heading" class="text-2xl font-semibold">Add to your watchlist</h2>
         @if (error()) { <p class="mt-5 rounded-md border border-red-300 bg-red-50 p-4 text-base text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">{{ error() }}</p> }
         <form class="mt-6 flex flex-col gap-4" #watchlistForm="ngForm" (ngSubmit)="saveNewItem()">
-          <label class="flex min-w-0 flex-col gap-2 text-base font-medium"><span>Title</span>
-            <input class="min-h-12 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="watchlistTitle" required maxlength="255" [(ngModel)]="title" placeholder="Movie title" autofocus>
-          </label>
+          <div class="flex min-w-0 flex-col gap-2 text-base font-medium">
+            <div class="flex items-center justify-between gap-2">
+              <label for="watchlist-title">Title</label>
+              <span class="text-xs font-normal text-stone-500 dark:text-neutral-400">TMDb suggestions appear as you type</span>
+            </div>
+            <div class="overflow-hidden rounded-md border border-stone-300 bg-white focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950">
+              <div class="flex min-h-12 w-full items-center gap-3 border-stone-300 px-3 dark:border-neutral-700" [class.border-b]="lookupResultsVisible">
+                <input id="watchlist-title" class="search-input min-w-0 flex-1 bg-transparent text-base text-stone-900 placeholder:text-stone-400 dark:text-white dark:placeholder:text-neutral-500" name="watchlistTitle" required maxlength="255" [(ngModel)]="title" placeholder="Movie title" autofocus>
+              </div>
+              <app-movie-lookup class="contents" [searchTerm]="title" (resultsVisible)="lookupResultsVisible = $event" (movieSelected)="onMovieLookupSelected($event)" (sessionExpired)="sessionExpired.emit()" />
+            </div>
+          </div>
           <fieldset class="flex flex-col gap-3">
             <legend class="mb-2 block text-sm font-medium">Priority</legend>
             <div class="inline-flex min-h-12 w-full gap-2" role="group" aria-label="Priority">
