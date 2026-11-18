@@ -42,6 +42,7 @@ The initial owner account and any later allowlisted accounts will be managed thr
 - `PUT /api/movies/{id}` accepts the same complete movie fields, updates only a movie owned by the authenticated account, and returns the updated movie with HTTP 200.
 - `DELETE /api/movies/{id}` deletes only a movie owned by the authenticated account and returns HTTP 204. A missing or differently owned movie returns HTTP 404.
 - Create and update require a non-blank title of at most 255 characters and a positive release year. Rating is optional; when present it must be an integer from 1 through 10.
+- Within one account's catalog, a movie is identified by its trimmed, case-insensitive title and exact release year. The same title may be used for different years, but the same title and year cannot be added twice.
 - Create, update, and delete require an authenticated session and its CSRF token. Clients cannot set or change the owner account.
 - Request validation failures return HTTP 400. Write operations do not reveal whether a movie ID belongs to a different account.
 
@@ -53,6 +54,7 @@ The initial owner account and any later allowlisted accounts will be managed thr
 - The catalog offers title search and rating filters. Rating filters are multi-select: choose one or more scores, optionally include unrated movies, or select All. Title and rating filters are applied by the backend across the full account catalog and combined with AND behavior. The interface loads more results on request and shows “No matching movies.” when active filters return no results.
 - Movie rows show the title, release year, and rating together. Selecting a row reveals Edit and Remove actions over it. Choosing Edit or Remove replaces that row with an inline editor or delete confirmation, respectively; Cancel returns to the row. The row expands or contracts to fit the panel, and panels use subtle motion unless the browser requests reduced motion.
 - Add and edit forms use a two-column layout with Title and Year above a full-width rating control. The edit form uses one contiguous button per score; selecting the active score again clears it to unrated. The add form currently uses a rating dropdown. Title and year validation errors are shown below the corresponding input after an invalid edit submission.
+- Typing a title triggers a debounced TMDb lookup. A suggestion is marked “Already in collection” and cannot be selected only when its trimmed, case-insensitive title and exact release year match a movie in the account's catalog; a suggestion with no release year is not marked as a duplicate.
 - The catalog and forms adapt to phone, tablet, and desktop widths. Movie titles can wrap on mobile, and desktop row actions are shown through the same row-selection overlay.
 - Theme defaults to the device preference and a manual override is saved in browser local storage. It is not synchronized across devices.
 - Recommendations are not yet available in the interface.

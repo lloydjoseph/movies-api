@@ -50,4 +50,26 @@ public interface MovieRepository extends JpaRepository<Movie, Integer> {
             @Param("name") String name,
             @Param("excludeMovieId") Integer excludeMovieId);
 
+    @Query("""
+            select count(m) > 0 from Movie m
+            where m.account.id = :accountId
+              and (:excludeMovieId is null or m.id <> :excludeMovieId)
+              and lower(trim(m.name)) = lower(:name)
+              and m.releaseYear = :releaseYear
+            """)
+    boolean existsByAccountAndNormalizedNameAndReleaseYearExcludingId(
+            @Param("accountId") Long accountId,
+            @Param("name") String name,
+            @Param("releaseYear") Integer releaseYear,
+            @Param("excludeMovieId") Integer excludeMovieId);
+
+    @Query("""
+            select m from Movie m
+            where m.account.id = :accountId
+              and lower(trim(m.name)) in :normalizedNames
+            """)
+    List<Movie> findByAccountAndNormalizedNames(
+            @Param("accountId") Long accountId,
+            @Param("normalizedNames") List<String> normalizedNames);
+
 }

@@ -125,7 +125,7 @@ public class MovieServiceImpl implements MovieService {
             }
         }
 
-        ensureTitleIsAvailable(request.name(), account, null,
+        ensureTitleIsAvailable(request.name(), request.releaseYear(), account, null,
                 transferItem == null ? null : transferItem.getId());
         var movie = mapper.toEntity(request);
         movie.setAccount(account);
@@ -137,7 +137,7 @@ public class MovieServiceImpl implements MovieService {
     @Override
     public MovieDto update(Integer id, MovieRequest request, Account account) {
         var movie = findOwnedMovie(id, account);
-        ensureTitleIsAvailable(request.name(), account, movie.getId(), null);
+        ensureTitleIsAvailable(request.name(), request.releaseYear(), account, movie.getId(), null);
         mapper.updateEntity(request, movie);
         return mapper.toDto(repository.save(movie));
     }
@@ -153,11 +153,11 @@ public class MovieServiceImpl implements MovieService {
     }
 
     private void ensureTitleIsAvailable(
-            String name, Account account, Integer excludeMovieId, Long excludeWatchlistItemId) {
+            String name, Integer releaseYear, Account account, Integer excludeMovieId, Long excludeWatchlistItemId) {
         String normalizedName = name.trim();
         if (watchlistRepository.existsDuplicateNameExceptId(account.getId(), normalizedName, excludeWatchlistItemId)
-                || repository.existsByAccountAndNormalizedNameExcludingId(
-                account.getId(), normalizedName, excludeMovieId)) {
+                || repository.existsByAccountAndNormalizedNameAndReleaseYearExcludingId(
+                account.getId(), normalizedName, releaseYear, excludeMovieId)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "Movie is already in your collection or watchlist");
         }

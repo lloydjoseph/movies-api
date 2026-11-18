@@ -65,6 +65,7 @@ class MovieApiIntegrationTests {
         registry.add("google.oauth.enabled", () -> false);
         registry.add("app.security.allowed-google-emails", () -> "owner@example.com,second@example.com");
         registry.add("app.security.session-cookie-secure", () -> false);
+        registry.add("tmdb.access-token", () -> "");
     }
 
     @BeforeEach
@@ -118,6 +119,25 @@ class MovieApiIntegrationTests {
         mockMvc.perform(get("/api/movies").with(oidcUser("owner-sub", "owner@example.com")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isEmpty());
+    }
+
+    @Test
+    void treatsSameTitleMoviesWithDifferentYearsAsDistinctEntries() throws Exception {
+        createMovie("owner-sub", "owner@example.com", "The Mist", 2007, null);
+
+        mockMvc.perform(post("/api/movies")
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content(movieJson("The Mist", 2016, null)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/movies")
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content(movieJson("the mist", 2007, null)))
+                .andExpect(status().isConflict());
     }
 
     @Test
@@ -312,6 +332,19 @@ class MovieApiIntegrationTests {
 
         mockMvc.perform(get("/api/watchlist"))
                 .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/movie-lookup").param("q", "Arrival"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/movie-lookup")
+                        .param("q", "Arrival")
+                        .with(oidcUser("owner-sub", "owner@example.com")))
+                .andExpect(status().isServiceUnavailable());
+
+        mockMvc.perform(get("/api/movie-lookup")
+                        .param("q", "A")
+                        .with(oidcUser("owner-sub", "owner@example.com")))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

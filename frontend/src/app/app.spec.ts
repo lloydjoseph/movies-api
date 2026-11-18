@@ -15,6 +15,7 @@ describe('App', () => {
     updateWatchlistItem: vi.fn((id: number, name: string, notes: string, priority: 'LOW' | 'MEDIUM' | 'HIGH') =>
       Promise.resolve({ id, name, notes: notes || null, priority })),
     deleteWatchlistItem: vi.fn(() => Promise.resolve()),
+    lookupMovies: vi.fn(() => Promise.resolve([])),
     listMovies: (): Promise<MoviePage> => Promise.resolve({
       items: [{ id: 1, name: 'Arrival', releaseYear: 2016, rating: 9 }],
       page: 0,
@@ -46,6 +47,8 @@ describe('App', () => {
     expect(rendered.querySelector('h1')?.textContent).toContain('Collection');
     expect(rendered.textContent).toContain('Arrival');
     expect(document.title).toBe('Collection | Joseph’s Movies');
+    expect(rendered.textContent).toContain('This product uses the TMDB API but is not endorsed or certified by TMDB.');
+    expect(rendered.querySelector('img[alt="The Movie Database (TMDB)"]')).not.toBeNull();
     fixture.componentInstance.selectTab('watchlist');
     expect(document.title).toBe('Watchlist | Joseph’s Movies');
     fixture.componentInstance.selectTab('movies');
@@ -159,6 +162,29 @@ describe('App', () => {
     fixture.destroy();
   });
 
+  it('fills a new movie form from a selected TMDb result', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const app = fixture.componentInstance;
+
+    app.openCreateForm();
+    fixture.detectChanges();
+    expect(app.releaseYear).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('input[name="releaseYear"]')?.placeholder)
+      .toBe(app.currentYear);
+    app.onMovieLookupSelected({
+      tmdbId: 329865,
+      title: 'Arrival',
+      originalTitle: 'Arrival',
+      releaseYear: 2016,
+      alreadyInCollection: false,
+    });
+
+    expect(app.title).toBe('Arrival');
+    expect(app.releaseYear).toBe(2016);
+    fixture.destroy();
+  });
+
   it('waits for an in-flight timed deletion before signing out', async () => {
     const deleteMovie = vi.spyOn(api, 'deleteMovie');
     const logout = vi.spyOn(api, 'logout');
@@ -220,11 +246,13 @@ describe('App', () => {
     expect(app.activeTab()).toBe('movies');
     expect(app.editorOpen()).toBe(true);
     expect(app.title).toBe('There Will Be Blood');
+    expect(app.releaseYear).toBeNull();
 
+    app.releaseYear = 2025;
     await app.saveMovie();
     fixture.detectChanges();
     expect(api.createMovie).toHaveBeenCalledWith(
-      { name: 'There Will Be Blood', releaseYear: new Date().getFullYear(), rating: null }, 7);
+      { name: 'There Will Be Blood', releaseYear: 2025, rating: null }, 7);
     expect(fixture.nativeElement.querySelector('app-watchlist')?.textContent).not.toContain('There Will Be Blood');
   });
 
@@ -251,12 +279,13 @@ describe('App', () => {
     expect(addButton?.className).toContain('w-full');
     expect(addButton?.className).toContain('bg-orange-600');
     expect(editor?.textContent).not.toContain('Title and release year are required.');
-    expect(editor?.querySelector('label')?.textContent?.trim()).toBe('Title');
+    expect(editor?.querySelector<HTMLInputElement>('input[name="title"]')?.labels?.[0]?.textContent?.trim()).toBe('Title');
     expect(editor?.querySelector<HTMLInputElement>('input[name="title"]')?.required).toBe(true);
     expect(editor?.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
     expect(editor?.querySelector('[role="group"][aria-label="Rating"]')?.parentElement?.textContent).toContain('Optional');
     expect(ratingButtons?.length).toBe(10);
     expect(ratingButtons?.[0].className).toContain('rounded-md');
+    expect(ratingButtons?.[0].className).toContain('dark:bg-neutral-950');
     expect(editor?.querySelector('[role="group"][aria-label="Rating"]')?.className).toContain('grid-cols-2');
     expect(editor?.querySelector('[role="group"][aria-label="Rating"]')?.className).toContain('sm:grid-cols-5');
     expect(editor?.querySelector('[role="group"][aria-label="Rating"]')?.className).toContain('lg:grid-cols-10');

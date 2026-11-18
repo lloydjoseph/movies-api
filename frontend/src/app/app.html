@@ -44,12 +44,23 @@
           </div>
           @if (error()) { <p class="mt-5 rounded-md border border-red-300 bg-red-50 p-4 text-base text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">{{ error() }}</p> }
           <form class="mt-6 grid grid-cols-1 gap-4" #movieForm="ngForm" novalidate (ngSubmit)="saveMovie()">
-            <label class="flex min-w-0 flex-col gap-2 text-base font-medium"><span>Title</span>
-              <input class="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="title" required maxlength="255" [(ngModel)]="title" placeholder="Movie title" autofocus>
+            <div class="flex min-w-0 flex-col gap-2 text-base font-medium">
+              <div class="flex items-center justify-between gap-2">
+                <label for="movie-title">Title</label>
+                <span class="text-xs font-normal text-stone-500 dark:text-neutral-400">TMDb suggestions appear as you type</span>
+              </div>
+              <div class="overflow-hidden rounded-md border border-stone-300 bg-white focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950">
+                <div class="flex min-h-12 w-full items-center gap-3 border-stone-300 px-3 dark:border-neutral-700" [class.border-b]="lookupResultsVisible">
+                  <input id="movie-title" class="search-input min-w-0 flex-1 bg-transparent text-base text-stone-900 placeholder:text-stone-400 dark:text-white dark:placeholder:text-neutral-500" name="title" required maxlength="255" [(ngModel)]="title" placeholder="Movie title" autofocus>
+                </div>
+                @if (!editingMovie()) {
+                  <app-movie-lookup class="contents" [searchTerm]="title" (resultsVisible)="lookupResultsVisible = $event" (movieSelected)="onMovieLookupSelected($event)" (sessionExpired)="onSessionExpired()" />
+                }
+              </div>
               @if (movieForm.submitted && !title.trim()) { <span class="text-sm font-normal text-red-700 dark:text-red-300" role="alert">Enter a movie title.</span> }
-            </label>
+            </div>
             <label class="flex min-w-0 flex-col gap-2 text-base font-medium"><span>Year</span>
-              <input class="hide-number-spinner min-h-12 w-full min-w-0 appearance-none rounded-md border border-stone-300 bg-white px-3 text-base focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950" name="releaseYear" required type="number" min="1" max="9999" [(ngModel)]="releaseYear">
+              <input class="hide-number-spinner min-h-12 w-full min-w-0 appearance-none rounded-md border border-stone-300 bg-white px-3 text-base placeholder:text-stone-400 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:placeholder:text-neutral-500" name="releaseYear" required type="number" min="1" max="9999" [(ngModel)]="releaseYear" placeholder="{{ currentYear }}">
               @if (movieForm.submitted && (!releaseYear || releaseYear < 1 || releaseYear > 9999)) { <span class="text-sm font-normal text-red-700 dark:text-red-300" role="alert">Enter a valid release year.</span> }
             </label>
             <div class="col-span-full flex flex-col gap-2">
@@ -63,7 +74,7 @@
                     [class.border-stone-300]="rating !== score"
                     [class.border-transparent]="rating === score" [class.bg-white]="rating !== score"
                     [class.dark:border-neutral-700]="rating !== score" [class.dark:border-transparent]="rating === score"
-                    [class.dark:bg-neutral-900]="rating !== score"
+                    [class.dark:bg-neutral-950]="rating !== score"
                     [class.hover:bg-stone-100]="rating !== score" [class.dark:hover:bg-neutral-800]="rating !== score">
                     {{ score }}
                   </button>
@@ -151,5 +162,13 @@
         />
       </section>
     }
+    <footer class="mx-auto max-w-5xl px-5 pb-28 pt-6 sm:px-8 sm:pb-8">
+      <section class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-stone-200 pt-4 text-xs text-stone-500 dark:border-neutral-800 dark:text-neutral-400" aria-label="TMDB attribution">
+        <a class="inline-flex shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-orange-600" href="https://www.themoviedb.org/" aria-label="The Movie Database">
+          <img class="h-3 w-auto" src="tmdb-logo.svg" alt="The Movie Database (TMDB)">
+        </a>
+        <p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+      </section>
+    </footer>
   </main>
 </div>

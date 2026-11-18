@@ -37,6 +37,7 @@ services:
       APP_FRONTEND_URL: ${APP_FRONTEND_URL:?Set APP_FRONTEND_URL}
       SESSION_COOKIE_SECURE: "true"
       SPRING_JPA_SHOW_SQL: "false"
+      TMDB_ACCESS_TOKEN: ${TMDB_ACCESS_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy

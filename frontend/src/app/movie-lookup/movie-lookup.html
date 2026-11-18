@@ -1,0 +1,37 @@
+@if (searchTerm.trim().length === 1) {
+  <p class="px-3 py-2 text-sm text-stone-600 dark:text-neutral-300">Enter at least 2 characters to search TMDb.</p>
+}
+@if (loading()) {
+  <p class="px-3 py-2 text-sm text-stone-600 dark:text-neutral-300" role="status">Searching TMDb…</p>
+}
+@if (error()) {
+  <p class="px-3 py-2 text-sm text-red-800 dark:text-red-200" role="alert">{{ error() }}</p>
+}
+@if (searched() && !results().length && !error()) {
+  <p class="px-3 py-2 text-sm text-stone-600 dark:text-neutral-300" role="status">No matches found. You can enter the movie details manually.</p>
+}
+@if (results().length) {
+  <ul class="divide-y divide-stone-200 bg-white dark:divide-neutral-700 dark:bg-neutral-950" aria-label="TMDb search results">
+    @for (movie of results(); track movie.tmdbId) {
+      <li>
+        <button
+          class="flex min-h-12 w-full cursor-pointer flex-col items-start justify-center gap-0.5 px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
+          type="button"
+          [disabled]="movie.alreadyInCollection"
+          [class.hover:bg-stone-100]="!movie.alreadyInCollection"
+          [class.dark:hover:bg-neutral-900]="!movie.alreadyInCollection"
+          (click)="selectMovie(movie)">
+          <span class="flex w-full items-center justify-between gap-3">
+            <span class="font-medium">{{ movie.title }} <span class="font-normal text-stone-600 dark:text-neutral-300">({{ movie.releaseYear ?? 'Year unavailable' }})</span></span>
+            @if (movie.alreadyInCollection) {
+              <span class="shrink-0 rounded bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-600 dark:bg-neutral-800 dark:text-neutral-300">Already in collection</span>
+            }
+          </span>
+          @if (movie.originalTitle && movie.originalTitle !== movie.title) {
+            <span class="text-sm text-stone-600 dark:text-neutral-300">Original title: {{ movie.originalTitle }}</span>
+          }
+        </button>
+      </li>
+    }
+  </ul>
+}

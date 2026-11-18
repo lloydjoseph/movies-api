@@ -66,6 +66,7 @@ Google sign-in uses these environment variables. Set them in a local, unshared I
 | `APP_ALLOWED_GOOGLE_EMAILS` | Comma-separated verified Google email addresses authorized to sign in. Each account has a separate catalog. |
 | `SESSION_COOKIE_SECURE` | Defaults to `true`; set to `false` only for local HTTP. |
 | `APP_FRONTEND_URL` | Post-login destination; defaults to `http://localhost:4200` for local Angular development. Production value: `https://jlloyd.fr/movies/`. |
+| `TMDB_ACCESS_TOKEN` | Optional TMDb API access token for movie title/year suggestions. Keep it private; manual movie entry works without it. |
 
 The app defaults to OAuth disabled and an empty allowlist. In that state, protected movie endpoints deny access. Keep the Google credentials and allowlist in `backend/.env` locally or in a protected server-side environment file for production. The production Compose stack uses separate `DB_ADMIN_USER`/`DB_ADMIN_PASSWORD` and `DB_USERNAME`/`DB_PASSWORD` credentials; only the latter are passed to Spring Boot.
 

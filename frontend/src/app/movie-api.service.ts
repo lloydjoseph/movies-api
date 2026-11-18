@@ -25,6 +25,14 @@ export interface MovieInput {
   rating: number | null;
 }
 
+export interface MovieLookupResult {
+  tmdbId: number;
+  title: string;
+  originalTitle: string;
+  releaseYear: number | null;
+  alreadyInCollection: boolean;
+}
+
 export interface MoviePage {
   items: Movie[];
   page: number;
@@ -99,6 +107,11 @@ export class MovieApiService {
       }
     }
     return firstValueFrom(this.http.get<MoviePage>('/api/movies', { params }));
+  }
+
+  lookupMovies(query: string): Promise<MovieLookupResult[]> {
+    const params = new HttpParams().set('q', query.trim());
+    return firstValueFrom(this.http.get<MovieLookupResult[]>('/api/movie-lookup', { params }));
   }
 
   listWatchlist(): Promise<WatchlistItem[]> {

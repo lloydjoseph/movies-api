@@ -8,9 +8,10 @@ import {
   LucideSun,
 } from '@lucide/angular';
 import { MovieApiService } from './movie-api.service';
-import type { Movie, MovieInput, SignedInUser, WatchlistItem } from './movie-api.service';
+import type { Movie, MovieInput, MovieLookupResult, SignedInUser, WatchlistItem } from './movie-api.service';
 import { CollectionComponent } from './collection/collection';
 import type { CollectionView, MovieDeletionRequest } from './collection/collection.models';
+import { MovieLookupComponent } from './movie-lookup/movie-lookup';
 import { ratingColor, ratingTextColor } from './movie-presentation';
 import { WatchlistComponent } from './watchlist/watchlist';
 
@@ -33,7 +34,15 @@ function isMovieSort(value: unknown): value is CollectionView['sortBy'] {
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, LucideCircleUserRound, LucideMoon, LucideSun, CollectionComponent, WatchlistComponent],
+  imports: [
+    FormsModule,
+    LucideCircleUserRound,
+    LucideMoon,
+    LucideSun,
+    CollectionComponent,
+    MovieLookupComponent,
+    WatchlistComponent,
+  ],
   templateUrl: './app.html',
 })
 export class App implements OnDestroy {
@@ -63,8 +72,10 @@ export class App implements OnDestroy {
   readonly theme = signal<Theme>(this.readThemePreference());
 
   title = '';
-  releaseYear: number | null = new Date().getFullYear();
+  readonly currentYear = new Date().getFullYear().toString();
+  releaseYear: number | null = null;
   rating: number | null = null;
+  lookupResultsVisible = false;
 
   @ViewChild('editorDialog') private editorDialog?: ElementRef<HTMLDialogElement>;
   @ViewChild(CollectionComponent) private collectionComponent?: CollectionComponent;
@@ -128,8 +139,9 @@ export class App implements OnDestroy {
     this.pendingWatchlistItemId.set(null);
     this.editingMovie.set(null);
     this.title = '';
-    this.releaseYear = new Date().getFullYear();
+    this.releaseYear = null;
     this.rating = null;
+    this.lookupResultsVisible = false;
     this.editorOpen.set(true);
     this.showDialog(this.editorDialog?.nativeElement);
   }
@@ -154,6 +166,7 @@ export class App implements OnDestroy {
     this.title = item.name;
     this.releaseYear = item.releaseYear ?? null;
     this.rating = null;
+    this.lookupResultsVisible = false;
     this.editorOpen.set(true);
     this.showDialog(this.editorDialog?.nativeElement);
   }
@@ -169,8 +182,15 @@ export class App implements OnDestroy {
     this.title = movie.name;
     this.releaseYear = movie.releaseYear;
     this.rating = movie.rating;
+    this.lookupResultsVisible = false;
     this.editorOpen.set(true);
     this.showDialog(this.editorDialog?.nativeElement);
+  }
+
+  onMovieLookupSelected(movie: MovieLookupResult): void {
+    this.title = movie.title;
+    this.releaseYear = movie.releaseYear;
+    this.lookupResultsVisible = false;
   }
 
   requestDelete(movie: Movie): void {
@@ -206,6 +226,7 @@ export class App implements OnDestroy {
     this.editorOpen.set(false);
     this.editingMovie.set(null);
     this.pendingWatchlistItemId.set(null);
+    this.lookupResultsVisible = false;
     this.hideDialog(this.editorDialog?.nativeElement);
   }
 
