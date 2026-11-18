@@ -1,0 +1,12 @@
+[Unit]
+Description=Back up the movies-api PostgreSQL database
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=joseph
+Environment=MOVIES_API_COMPOSE_FILE=/home/joseph/movies-api/docker-compose.production.yml
+Environment=MOVIES_API_PRODUCTION_ENV=/etc/movies-api/production.env
+Environment=MOVIES_API_BACKUP_DIR=/var/backups/movies-api
+ExecStart=/home/joseph/movies-api/deploy/backup-production-db.sh weekly

@@ -72,7 +72,7 @@ These are observed hardware details, not a measured minimum requirement or capac
 
 ## Operations and recovery — Open
 
-- Database backup schedule, retention, off-server copy, and restore procedure.
+- Weekly same-server PostgreSQL backups are implemented in the repository: compressed dumps, 30-day retention, and a pre-deployment dump before Liquibase migrations. The systemd timer still needs installation/verification on the server, and restore rehearsal is outstanding. Local backups do not protect against loss of the server or its disks.
 - Application update and rollback process.
 - Monitoring, logs, health checks, and alerting appropriate for a personally operated service.
 - Secret storage and rotation, including Google OAuth client credentials and the account allowlist.
@@ -81,7 +81,7 @@ These are observed hardware details, not a measured minimum requirement or capac
 
 ## Deployment procedure
 
-See the [manual deployment guide](deployment-guide.md) for the release checklist. The production environment-file path is established; the protected backup location still needs to be selected and verified.
+See the [manual deployment guide](deployment-guide.md) for the release checklist. It documents installation of the weekly systemd timer and the `/var/backups/movies-api` location; verify the runner user's directory access before deployment.
 
 The active production database is the PostgreSQL service in `movies-production`. Do not plan a migration or cutover until its contents have been compared with the separate MySQL service and the local catalog; see the [data migration plan](data-migration.md).
 
@@ -94,6 +94,6 @@ The active production database is the PostgreSQL service in `movies-production`.
 - Set `APP_FRONTEND_URL=https://jlloyd.fr/movies/`, register the production Google OAuth callback, and keep `SESSION_COOKIE_SECURE=true`.
 - Verify the frontend gateway's HSTS, CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and Permissions Policy headers through the public HTTPS host Nginx route.
 - Define the deployed commit, update/rollback procedure, and image update schedule.
-- Add backups and verify restoration before relying on the catalog as the sole record of watch history.
+- Install and verify the weekly backup timer, then rehearse restoring a dump before relying on the catalog as the sole record of watch history.
 
 The exact implementation choices should follow inspection of the existing server and network setup rather than assumptions about a generic cloud platform.
