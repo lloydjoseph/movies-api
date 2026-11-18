@@ -173,4 +173,14 @@
                 CHECK (release_year IS NULL OR release_year BETWEEN 1 AND 9999)
         </sql>
     </changeSet>
+
+    <changeSet id="013-require-watchlist-release-year" author="movies-api">
+        <delete tableName="watchlist_item">
+            <where>release_year IS NULL</where>
+        </delete>
+        <addNotNullConstraint
+                tableName="watchlist_item"
+                columnName="release_year"
+                columnDataType="INT"/>
+    </changeSet>
 </databaseChangeLog>

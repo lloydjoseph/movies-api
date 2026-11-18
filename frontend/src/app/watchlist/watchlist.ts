@@ -92,14 +92,12 @@ export class WatchlistComponent implements OnChanges {
 
   async saveNewItem(): Promise<void> {
     const name = this.title.trim();
-    if (!name || this.saving() || !this.isValidReleaseYear(this.releaseYear)) return;
+    if (!name || this.releaseYear === null || this.saving() || !this.isValidReleaseYear(this.releaseYear)) return;
 
     this.saving.set(true);
     this.error.set('');
     try {
-      const item = this.releaseYear === null
-        ? await this.api.addWatchlistItem(name, this.notes.trim(), this.priority)
-        : await this.api.addWatchlistItem(name, this.notes.trim(), this.priority, this.releaseYear);
+      const item = await this.api.addWatchlistItem(name, this.releaseYear, this.notes.trim(), this.priority);
       this.items.update(items => [...items, item].sort((a, b) => a.name.localeCompare(b.name)));
       this.dismissEditor();
     } catch (error) {
@@ -132,15 +130,13 @@ export class WatchlistComponent implements OnChanges {
 
   async saveEdit(item: WatchlistItem): Promise<void> {
     const name = this.editingTitle.trim();
-    if (!name || this.saving() || !this.isValidReleaseYear(this.editingReleaseYear)) return;
+    if (!name || this.editingReleaseYear === null || this.saving() || !this.isValidReleaseYear(this.editingReleaseYear)) return;
 
     this.saving.set(true);
     this.error.set('');
     try {
-      const updated = this.editingReleaseYear === null
-        ? await this.api.updateWatchlistItem(item.id, name, this.editingNotes.trim(), this.editingPriority)
-        : await this.api.updateWatchlistItem(
-          item.id, name, this.editingNotes.trim(), this.editingPriority, this.editingReleaseYear);
+      const updated = await this.api.updateWatchlistItem(
+        item.id, name, this.editingReleaseYear, this.editingNotes.trim(), this.editingPriority);
       this.items.update(items => items
         .map(current => current.id === item.id ? updated : current)
         .sort((a, b) => a.name.localeCompare(b.name)));
@@ -191,7 +187,7 @@ export class WatchlistComponent implements OnChanges {
   }
 
   isValidReleaseYear(year: number | null): boolean {
-    return year === null || (Number.isInteger(year) && year >= 1 && year <= 9999);
+    return year !== null && Number.isInteger(year) && year >= 1 && year <= 9999;
   }
 
   onEditorDialogCancel(event: Event): void {

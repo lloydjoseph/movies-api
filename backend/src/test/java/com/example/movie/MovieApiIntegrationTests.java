@@ -353,9 +353,10 @@ class MovieApiIntegrationTests {
                         .with(oidcUser("owner-sub", "owner@example.com"))
                         .with(csrf())
                         .contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"  There Will Be Blood  \",\"notes\":\"  Recommended by Alex  \"}"))
+                        .content("{\"name\":\"  There Will Be Blood  \",\"releaseYear\":2007,\"notes\":\"  Recommended by Alex  \"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("There Will Be Blood"))
+                .andExpect(jsonPath("$.releaseYear").value(2007))
                 .andExpect(jsonPath("$.notes").value("Recommended by Alex"))
                 .andExpect(jsonPath("$.priority").value("MEDIUM"))
                 .andReturn()
@@ -367,6 +368,7 @@ class MovieApiIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].name").value("There Will Be Blood"))
+                .andExpect(jsonPath("$[0].releaseYear").value(2007))
                 .andExpect(jsonPath("$[0].notes").value("Recommended by Alex"));
 
         mockMvc.perform(get("/api/watchlist").with(oidcUser("other-sub", "second@example.com")))
@@ -377,7 +379,7 @@ class MovieApiIntegrationTests {
                         .with(oidcUser("owner-sub", "owner@example.com"))
                         .with(csrf())
                         .contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"there will be blood\"}"))
+                        .content("{\"name\":\"there will be blood\",\"releaseYear\":2007}"))
                 .andExpect(status().isConflict());
 
         mockMvc.perform(delete("/api/watchlist/{id}", id)
@@ -394,8 +396,15 @@ class MovieApiIntegrationTests {
                         .with(oidcUser("owner-sub", "owner@example.com"))
                         .with(csrf())
                         .contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"Updated title\",\"notes\":\"New note\"}"))
+                        .content("{\"name\":\"Updated title\",\"releaseYear\":2001,\"notes\":\"New note\"}"))
                 .andExpect(status().isNotFound());
+
+        mockMvc.perform(post("/api/watchlist")
+                        .with(oidcUser("owner-sub", "owner@example.com"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"Missing year\"}"))
+                .andExpect(status().isBadRequest());
 
         mockMvc.perform(post("/api/watchlist")
                         .with(oidcUser("owner-sub", "owner@example.com"))
@@ -411,7 +420,7 @@ class MovieApiIntegrationTests {
                         .with(oidcUser("owner-sub", "owner@example.com"))
                         .with(csrf())
                         .contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"Original title\",\"notes\":\"Old note\"}"))
+                        .content("{\"name\":\"Original title\",\"releaseYear\":1999,\"notes\":\"Old note\"}"))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -422,16 +431,17 @@ class MovieApiIntegrationTests {
                         .with(oidcUser("other-sub", "second@example.com"))
                         .with(csrf())
                         .contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"Changed title\",\"notes\":\"Changed note\"}"))
+                        .content("{\"name\":\"Changed title\",\"releaseYear\":1999,\"notes\":\"Changed note\"}"))
                 .andExpect(status().isNotFound());
 
         mockMvc.perform(put("/api/watchlist/{id}", id)
                         .with(oidcUser("owner-sub", "owner@example.com"))
                         .with(csrf())
                         .contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"Updated title\",\"notes\":\"A new note\",\"priority\":\"HIGH\"}"))
+                        .content("{\"name\":\"Updated title\",\"releaseYear\":2001,\"notes\":\"A new note\",\"priority\":\"HIGH\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Updated title"))
+                .andExpect(jsonPath("$.releaseYear").value(2001))
                 .andExpect(jsonPath("$.notes").value("A new note"))
                 .andExpect(jsonPath("$.priority").value("HIGH"));
 
@@ -439,7 +449,7 @@ class MovieApiIntegrationTests {
                         .with(oidcUser("owner-sub", "owner@example.com"))
                         .with(csrf())
                         .contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"Updated title\",\"notes\":\"" + "x".repeat(501)
+                        .content("{\"name\":\"Updated title\",\"releaseYear\":2001,\"notes\":\"" + "x".repeat(501)
                                 + "\",\"priority\":\"LOW\"}"))
                 .andExpect(status().isBadRequest());
 
@@ -447,7 +457,7 @@ class MovieApiIntegrationTests {
                         .with(oidcUser("owner-sub", "owner@example.com"))
                         .with(csrf())
                         .contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"Updated title\",\"notes\":\"A new note\",\"priority\":\"URGENT\"}"))
+                        .content("{\"name\":\"Updated title\",\"releaseYear\":2001,\"notes\":\"A new note\",\"priority\":\"URGENT\"}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -459,14 +469,14 @@ class MovieApiIntegrationTests {
                         .with(oidcUser("owner-sub", "owner@example.com"))
                         .with(csrf())
                         .contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"  arrival \"}"))
+                        .content("{\"name\":\"  arrival \",\"releaseYear\":2016}"))
                 .andExpect(status().isConflict());
 
         mockMvc.perform(post("/api/watchlist")
                         .with(oidcUser("owner-sub", "owner@example.com"))
                         .with(csrf())
                         .contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"There Will Be Blood\"}"))
+                        .content("{\"name\":\"There Will Be Blood\",\"releaseYear\":2007}"))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/movies")
@@ -483,7 +493,7 @@ class MovieApiIntegrationTests {
                         .with(oidcUser("owner-sub", "owner@example.com"))
                         .with(csrf())
                         .contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"There Will Be Blood\",\"notes\":\"Recommended by Alex\"}"))
+                        .content("{\"name\":\"There Will Be Blood\",\"releaseYear\":2007,\"notes\":\"Recommended by Alex\"}"))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -534,6 +544,12 @@ class MovieApiIntegrationTests {
                         + "WHERE table_schema='public' AND table_name='watchlist_item' AND column_name='priority'",
                 String.class);
         assertThat(priorityNullability).isEqualTo("NO");
+
+        String watchlistReleaseYearNullability = jdbcTemplate.queryForObject(
+                "SELECT is_nullable FROM information_schema.columns "
+                        + "WHERE table_schema='public' AND table_name='watchlist_item' AND column_name='release_year'",
+                String.class);
+        assertThat(watchlistReleaseYearNullability).isEqualTo("NO");
 
         String identity = jdbcTemplate.queryForObject(
                 "SELECT is_identity FROM information_schema.columns "

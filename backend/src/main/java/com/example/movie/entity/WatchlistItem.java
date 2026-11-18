@@ -29,7 +29,7 @@ public class WatchlistItem {
     @Column(nullable = false, length = 255)
     private String name;
 
-    @Column(name = "release_year")
+    @Column(name = "release_year", nullable = false)
     private Integer releaseYear;
 
     @Column(length = 500)

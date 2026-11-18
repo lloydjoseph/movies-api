@@ -82,8 +82,8 @@
               <app-movie-lookup class="contents" [searchTerm]="title" (resultsVisible)="lookupResultsVisible = $event" (movieSelected)="onMovieLookupSelected($event)" (sessionExpired)="sessionExpired.emit()" />
             </div>
           </div>
-          <label class="flex flex-col gap-2 text-base font-medium">Release year <span class="text-xs font-normal text-stone-500 dark:text-neutral-400">Optional</span>
-            <input class="hide-number-spinner min-h-12 w-full appearance-none rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="watchlistReleaseYear" type="number" min="1" max="9999" [(ngModel)]="releaseYear" placeholder="Year">
+          <label class="flex flex-col gap-2 text-base font-medium">Release year
+            <input class="hide-number-spinner min-h-12 w-full appearance-none rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="watchlistReleaseYear" required type="number" min="1" max="9999" [(ngModel)]="releaseYear" placeholder="Year">
           </label>
           <fieldset class="flex flex-col gap-3">
             <legend class="mb-2 block text-sm font-medium">Priority</legend>
@@ -123,8 +123,8 @@
           <label class="flex min-w-0 flex-col gap-2 text-base font-medium"><span>Title</span>
             <input class="min-h-12 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 focus:border-orange-600 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="editWatchlistTitle" required maxlength="255" [(ngModel)]="editingTitle" autofocus>
           </label>
-          <label class="flex flex-col gap-2 text-base font-medium">Release year <span class="text-xs font-normal text-stone-500 dark:text-neutral-400">Optional</span>
-            <input class="hide-number-spinner min-h-12 w-full appearance-none rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="editWatchlistReleaseYear" type="number" min="1" max="9999" [(ngModel)]="editingReleaseYear" placeholder="Year">
+          <label class="flex flex-col gap-2 text-base font-medium">Release year
+            <input class="hide-number-spinner min-h-12 w-full appearance-none rounded-md border border-stone-300 bg-white px-3 text-base text-stone-900 placeholder:text-stone-400 focus:outline-2 focus:outline-orange-600 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white" name="editWatchlistReleaseYear" required type="number" min="1" max="9999" [(ngModel)]="editingReleaseYear" placeholder="Year">
           </label>
           <fieldset class="flex flex-col gap-3">
             <legend class="mb-2 block text-sm font-medium">Priority</legend>

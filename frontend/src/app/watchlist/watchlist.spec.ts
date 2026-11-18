@@ -8,6 +8,7 @@ describe('WatchlistComponent', () => {
   const initialItem: WatchlistItem = {
     id: 7,
     name: 'There Will Be Blood',
+    releaseYear: 2007,
     notes: 'Recommended by Alex',
     priority: 'MEDIUM',
   };
@@ -21,10 +22,10 @@ describe('WatchlistComponent', () => {
   beforeEach(async () => {
     api = {
       listWatchlist: vi.fn(() => Promise.resolve([initialItem])),
-      addWatchlistItem: vi.fn((name: string, notes: string, priority: WatchlistItem['priority']) =>
-        Promise.resolve({ id: 8, name, notes: notes || null, priority })),
-      updateWatchlistItem: vi.fn((id: number, name: string, notes: string, priority: WatchlistItem['priority']) =>
-        Promise.resolve({ id, name, notes: notes || null, priority })),
+      addWatchlistItem: vi.fn((name: string, releaseYear: number, notes: string, priority: WatchlistItem['priority']) =>
+        Promise.resolve({ id: 8, name, releaseYear, notes: notes || null, priority })),
+      updateWatchlistItem: vi.fn((id: number, name: string, releaseYear: number, notes: string, priority: WatchlistItem['priority']) =>
+        Promise.resolve({ id, name, releaseYear, notes: notes || null, priority })),
       deleteWatchlistItem: vi.fn(() => Promise.resolve()),
     };
     await TestBed.configureTestingModule({
@@ -61,21 +62,23 @@ describe('WatchlistComponent', () => {
 
     component.openAddForm();
     component.title = 'Moonlight';
+    component.releaseYear = 2016;
     component.notes = 'Watch again';
     component.priority = 'HIGH';
     await component.saveNewItem();
     fixture.detectChanges();
 
-    expect(api.addWatchlistItem).toHaveBeenCalledWith('Moonlight', 'Watch again', 'HIGH');
+    expect(api.addWatchlistItem).toHaveBeenCalledWith('Moonlight', 2016, 'Watch again', 'HIGH');
     expect(component.items().map(item => item.name)).toEqual(['Moonlight', 'There Will Be Blood']);
 
     component.openEdit(component.items()[0]);
+    component.editingReleaseYear = 2017;
     component.editingNotes = 'Watch on a big screen';
     component.editingPriority = 'LOW';
     await component.saveEdit(component.items()[0]);
     fixture.detectChanges();
 
-    expect(api.updateWatchlistItem).toHaveBeenCalledWith(8, 'Moonlight', 'Watch on a big screen', 'LOW');
+    expect(api.updateWatchlistItem).toHaveBeenCalledWith(8, 'Moonlight', 2017, 'Watch on a big screen', 'LOW');
     expect(component.items()[0].notes).toBe('Watch on a big screen');
     expect(component.items()[0].priority).toBe('LOW');
   });
@@ -137,6 +140,7 @@ describe('WatchlistComponent', () => {
     const fixture = TestBed.createComponent(WatchlistComponent);
     const component = fixture.componentInstance;
     component.title = 'Arrival';
+    component.releaseYear = 2016;
     await component.saveNewItem();
 
     expect(component.error()).toBe('That title is already in your collection or watchlist.');

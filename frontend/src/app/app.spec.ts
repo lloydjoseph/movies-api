@@ -8,12 +8,12 @@ describe('App', () => {
   const api = {
     currentUser: () => Promise.resolve({ email: 'joseph@example.com', name: 'Joseph Lloyd' }),
     listWatchlist: () => Promise.resolve([{
-      id: 7, name: 'There Will Be Blood', notes: 'Recommended by Alex', priority: 'MEDIUM' as const,
+      id: 7, name: 'There Will Be Blood', releaseYear: 2007, notes: 'Recommended by Alex', priority: 'MEDIUM' as const,
     }]),
-    addWatchlistItem: vi.fn((name: string, notes: string, priority: 'LOW' | 'MEDIUM' | 'HIGH') =>
-      Promise.resolve({ id: 8, name, notes: notes || null, priority })),
-    updateWatchlistItem: vi.fn((id: number, name: string, notes: string, priority: 'LOW' | 'MEDIUM' | 'HIGH') =>
-      Promise.resolve({ id, name, notes: notes || null, priority })),
+    addWatchlistItem: vi.fn((name: string, releaseYear: number, notes: string, priority: 'LOW' | 'MEDIUM' | 'HIGH') =>
+      Promise.resolve({ id: 8, name, releaseYear, notes: notes || null, priority })),
+    updateWatchlistItem: vi.fn((id: number, name: string, releaseYear: number, notes: string, priority: 'LOW' | 'MEDIUM' | 'HIGH') =>
+      Promise.resolve({ id, name, releaseYear, notes: notes || null, priority })),
     deleteWatchlistItem: vi.fn(() => Promise.resolve()),
     lookupMovies: vi.fn(() => Promise.resolve([])),
     listMovies: (): Promise<MoviePage> => Promise.resolve({
@@ -246,7 +246,7 @@ describe('App', () => {
     expect(app.activeTab()).toBe('movies');
     expect(app.editorOpen()).toBe(true);
     expect(app.title).toBe('There Will Be Blood');
-    expect(app.releaseYear).toBeNull();
+    expect(app.releaseYear).toBe(2007);
 
     app.releaseYear = 2025;
     await app.saveMovie();
